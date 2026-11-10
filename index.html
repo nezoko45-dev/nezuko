@@ -26,7 +26,7 @@ const aura=new THREE.Mesh(new THREE.TorusGeometry(.75,.07,8,32),new THREE.MeshBa
 let bossAura;
 const loader=new GLTFLoader();loader.load('./succubus_boss_for_model_engine.glb',g=>{
  boss=new THREE.Group();const model=g.scene;model.scale.setScalar(1.5);model.rotation.y=Math.PI;boss.add(model);boss.position.set(0,0,-2);boss.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true}});scene.add(boss);
- mixer=new AnimationMixer(boss);clips=g.animations;
+ mixer=new AnimationMixer(model);clips=g.animations;
  const names=clips.map(c=>c.name);console.log('GLB animation clips:',names);
  function find(pattern){return clips.find(c=>pattern.test(c.name.toLowerCase()))}
 const attackClips=clips.filter(c=>/attack|atk|slash|strike|combo|skill|hit|cast/i.test(c.name));let attackCycle=0;const attackActions=attackClips.map(c=>mixer.clipAction(c));
