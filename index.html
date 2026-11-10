@@ -33,7 +33,6 @@ const survivors=[];for(let i=0;i<4;i++){const a=new THREE.Group();const body=new
 const cell=4,nav=[];for(let x=-20;x<=20;x+=cell)for(let z=-20;z<=20;z+=cell)nav.push({x,z,links:[]});
 const ray=new THREE.Raycaster(),dirs=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
 for(const n of nav)for(const [dx,dz] of dirs){const q=nav.find(k=>k.x===n.x+dx*cell&&k.z===n.z+dz*cell);if(!q)continue;const from=new THREE.Vector3(n.x,.7,n.z),to=new THREE.Vector3(q.x,.7,q.z),v=to.clone().sub(from);ray.set(from,v.normalize());ray.far=v.length();if(!ray.intersectObjects(city.children,false).length)n.links.push(q)}
-rebuildNavGizmos();
 function nearestCell(p){return nav.reduce((a,b)=>Math.hypot(b.x-p.x,b.z-p.z)<Math.hypot(a.x-p.x,a.z-p.z)?b:a,nav[0])}
 function nextCell(start,goal){const seen=new Set([start]),queue=[[start,null]];while(queue.length){const [n,first]=queue.shift();if(n===goal)return first||n;for(const q of n.links){const from=new THREE.Vector3(n.x,.7,n.z),to=new THREE.Vector3(q.x,.7,q.z),v=to.clone().sub(from);ray.set(from,v.normalize());ray.far=v.length();const blocked=ray.intersectObjects(city.children,false).length>0;if(!blocked&&!seen.has(q)){seen.add(q);queue.push([q,first||q])}}}return start}
 // Debug ray gizmos: green = clear cell bridge, red = building-blocked bridge. Press G to toggle.
