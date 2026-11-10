@@ -5,9 +5,9 @@
 </style></head><body>
 <div id="hud"><div class="panel"><div class="label">NEZUKO • DEMON</div><div class="bar"><div id="bossbar" class="fill"></div></div><small id="bossnum">1000 / 1000</small></div><div class="panel player"><div class="label">PLAYER</div><div class="bar"><div id="playerbar" class="fill"></div></div><small id="playernum">100 / 100</small></div></div>
 <div id="message">FIGHT!</div><div id="help">WASD move · Mouse click attack · Space dodge <button id="restart">Restart</button></div>
-<script type="module">
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>\n<script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
-import {GLTFLoader} from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 const scene=new THREE.Scene();scene.background=new THREE.Color(0x100611);scene.fog=new THREE.Fog(0x100611,18,48);
 const camera=new THREE.PerspectiveCamera(55,innerWidth/innerHeight,.1,100);camera.position.set(0,8,13);
 const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.toneMapping=THREE.ACESFilmicToneMapping;document.body.appendChild(renderer.domElement);
