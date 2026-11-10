@@ -15,7 +15,11 @@ const camera=new THREE.PerspectiveCamera(65,innerWidth/innerHeight,.1,150);camer
 const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.toneMapping=THREE.ACESFilmicToneMapping;document.body.appendChild(renderer.domElement);
 scene.add(new THREE.HemisphereLight(0xffc5df,0x24102d,2));const sun=new THREE.DirectionalLight(0xffb5d6,3);sun.position.set(5,12,7);sun.castShadow=true;scene.add(sun);
 const floor=new THREE.Mesh(new THREE.CircleGeometry(22,64),new THREE.MeshStandardMaterial({color:0x28152b,roughness:.8}));floor.rotation.x=-Math.PI/2;floor.receiveShadow=true;scene.add(floor);
-const grid=new THREE.GridHelper(44,44,0x6d315d,0x3a2040);grid.position.y=.012;scene.add(grid);
+// Ruined city buildings around the combat zone
+const city=new THREE.Group();scene.add(city);
+const buildingMats=[0x34383d,0x484344,0x55504a,0x292f36].map(c=>new THREE.MeshStandardMaterial({color:c,roughness:.95}));
+for(let i=0;i<42;i++){let x=(Math.random()-.5)*75,z=(Math.random()-.5)*75;if(Math.abs(x)<10&&Math.abs(z)<13)continue;let w=3+Math.random()*5,d=3+Math.random()*5,h=5+Math.random()*17;let b=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),buildingMats[i%4]);b.position.set(x,h/2,z);b.castShadow=true;b.receiveShadow=true;city.add(b)}
+
 const arena=new THREE.Mesh(new THREE.RingGeometry(8.8,9,96),new THREE.MeshBasicMaterial({color:0xff438c,transparent:true,opacity:.35,side:THREE.DoubleSide}));arena.rotation.x=-Math.PI/2;arena.position.y=.02;scene.add(arena);
 document.getElementById('message').textContent='LOADING ARENA…';
 let boss, mixer, clips={}, currentAction, currentState='idle', bossHP=1000,playerHP=100,alive=true,deadAt=0,attackAt=0,playerAttackAt=0,invuln=0,gameOver=false,attackTimer=0,respawnPending=false,playerRespawnAt=0;const BOSS_ATTACK_INTERVAL=3;
