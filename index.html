@@ -18,12 +18,12 @@ const floor=new THREE.Mesh(new THREE.PlaneGeometry(2000,2000),new THREE.MeshStan
 // Ruined city buildings around the combat zone
 const city=new THREE.Group();scene.add(city);
 const buildingMats=[0x34383d,0x484344,0x55504a,0x292f36].map(c=>new THREE.MeshStandardMaterial({color:c,roughness:.95}));
-const chunkSize=48,loadedChunks=new Set();function generateChunk(cx,cz){const key=cx+','+cz;if(loadedChunks.has(key))return;loadedChunks.add(key);for(let i=0;i<9;i++){const x=cx*chunkSize+(Math.random()-.5)*chunkSize,z=cz*chunkSize+(Math.random()-.5)*chunkSize;if(Math.abs(x)<9&&Math.abs(z)<12)continue;const w=4+Math.random()*7,d=4+Math.random()*7,h=6+Math.random()*22;const b=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),buildingMats[Math.floor(Math.random()*4)]);b.position.set(x,h/2,z);b.castShadow=true;b.receiveShadow=true;city.add(b)}}function updateChunks(p){const cx=Math.floor(p.x/chunkSize),cz=Math.floor(p.z/chunkSize);for(let x=cx-1;x<=cx+1;x++)for(let z=cz-1;z<=cz+1;z++)generateChunk(x,z)}updateChunks(player.position);
+const chunkSize=48,loadedChunks=new Set();function generateChunk(cx,cz){const key=cx+','+cz;if(loadedChunks.has(key))return;loadedChunks.add(key);for(let i=0;i<9;i++){const x=cx*chunkSize+(Math.random()-.5)*chunkSize,z=cz*chunkSize+(Math.random()-.5)*chunkSize;if(Math.abs(x)<9&&Math.abs(z)<12)continue;const w=4+Math.random()*7,d=4+Math.random()*7,h=6+Math.random()*22;const b=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),buildingMats[Math.floor(Math.random()*4)]);b.position.set(x,h/2,z);b.castShadow=true;b.receiveShadow=true;city.add(b)}}function updateChunks(p){const cx=Math.floor(p.x/chunkSize),cz=Math.floor(p.z/chunkSize);for(let x=cx-1;x<=cx+1;x++)for(let z=cz-1;z<=cz+1;z++)generateChunk(x,z)}
 
 
 document.getElementById('message').textContent='LOADING ARENA…';
 let boss, mixer, clips={}, currentAction, currentState='idle', bossHP=1000,playerHP=100,alive=true,deadAt=0,attackAt=0,playerAttackAt=0,invuln=0,gameOver=false,attackTimer=0,respawnPending=false,playerRespawnAt=0,bossTarget=null,bossRetargetAt=0;const BOSS_ATTACK_INTERVAL=3;
-const player=new THREE.Group();scene.add(player);player.position.set(0,0,5);
+const player=new THREE.Group();scene.add(player);player.position.set(0,0,5);updateChunks(player.position);
 const pbody=new THREE.Mesh(new THREE.CapsuleGeometry(.42,.9,4,8),new THREE.MeshStandardMaterial({color:0x38c9ed,emissive:0x073344}));pbody.position.y=1;player.add(pbody);
 const phead=new THREE.Mesh(new THREE.SphereGeometry(.32,16,12),new THREE.MeshStandardMaterial({color:0x9cecff}));phead.position.y=1.85;player.add(phead);
 const aura=new THREE.Mesh(new THREE.TorusGeometry(.75,.07,8,32),new THREE.MeshBasicMaterial({color:0xff69b2}));aura.rotation.x=Math.PI/2;aura.position.y=.1;player.add(aura);
