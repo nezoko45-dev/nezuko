@@ -10,7 +10,7 @@
 import * as THREE from 'three';
 import {AnimationMixer} from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
-const scene=new THREE.Scene();scene.background=new THREE.Color(0x100611);scene.fog=new THREE.Fog(0x100611,18,48);
+let player;\nconst scene=new THREE.Scene();scene.background=new THREE.Color(0x100611);scene.fog=new THREE.Fog(0x100611,18,48);
 const camera=new THREE.PerspectiveCamera(65,innerWidth/innerHeight,.1,150);camera.position.set(0,5,10);
 const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.toneMapping=THREE.ACESFilmicToneMapping;document.body.appendChild(renderer.domElement);
 scene.add(new THREE.HemisphereLight(0xffc5df,0x24102d,2));const sun=new THREE.DirectionalLight(0xffb5d6,3);sun.position.set(5,12,7);sun.castShadow=true;scene.add(sun);
@@ -23,7 +23,7 @@ const chunkSize=48,loadedChunks=new Set();function generateChunk(cx,cz){const ke
 
 document.getElementById('message').textContent='LOADING ARENA…';
 let boss, mixer, clips={}, currentAction, currentState='idle', bossHP=1000,playerHP=100,alive=true,deadAt=0,attackAt=0,playerAttackAt=0,invuln=0,gameOver=false,attackTimer=0,respawnPending=false,playerRespawnAt=0,bossTarget=null,bossRetargetAt=0;const BOSS_ATTACK_INTERVAL=3;
-const player=new THREE.Group();scene.add(player);player.position.set(0,0,5);updateChunks(player.position);
+player=new THREE.Group();scene.add(player);player.position.set(0,0,5);updateChunks(player.position);
 const pbody=new THREE.Mesh(new THREE.CapsuleGeometry(.42,.9,4,8),new THREE.MeshStandardMaterial({color:0x38c9ed,emissive:0x073344}));pbody.position.y=1;player.add(pbody);
 const phead=new THREE.Mesh(new THREE.SphereGeometry(.32,16,12),new THREE.MeshStandardMaterial({color:0x9cecff}));phead.position.y=1.85;player.add(phead);pbody.visible=false;phead.visible=false;
 const aura=new THREE.Mesh(new THREE.TorusGeometry(.75,.07,8,32),new THREE.MeshBasicMaterial({color:0xff69b2}));aura.rotation.x=Math.PI/2;aura.position.y=.1;player.add(aura);aura.visible=false;
