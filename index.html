@@ -7,6 +7,7 @@
 <div id="message">FIGHT!</div><div id="help">WASD move · Mouse click attack · Space dodge <button id="restart">Restart</button></div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>\n<script type="module">
 import * as THREE from 'three';
+import {AnimationMixer} from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 const scene=new THREE.Scene();scene.background=new THREE.Color(0x100611);scene.fog=new THREE.Fog(0x100611,18,48);
 const camera=new THREE.PerspectiveCamera(55,innerWidth/innerHeight,.1,100);camera.position.set(0,8,13);
@@ -23,8 +24,8 @@ const phead=new THREE.Mesh(new THREE.SphereGeometry(.32,16,12),new THREE.MeshSta
 const aura=new THREE.Mesh(new THREE.TorusGeometry(.75,.07,8,32),new THREE.MeshBasicMaterial({color:0xff69b2}));aura.rotation.x=Math.PI/2;aura.position.y=.1;player.add(aura);
 let bossAura;
 const loader=new GLTFLoader();loader.load('./succubus_boss_for_model_engine.glb',g=>{
- boss=g.scene;boss.scale.setScalar(1.5);boss.rotation.y=Math.PI;boss.position.set(0,0,-2);boss.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true}});scene.add(boss);
- mixer=new THREE.AnimationMixer(boss);clips=g.animations;
+ boss=new THREE.Group();const model=g.scene;model.scale.setScalar(1.5);model.rotation.y=Math.PI;boss.add(model);boss.position.set(0,0,-2);boss.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true}});scene.add(boss);
+ mixer=new AnimationMixer(boss);clips=g.animations;
  const names=clips.map(c=>c.name);console.log('GLB animation clips:',names);
  function find(pattern){return clips.find(c=>pattern.test(c.name.toLowerCase()))}
 const attackClips=clips.filter(c=>/attack|atk|slash|strike|combo|skill|hit|cast/i.test(c.name));let attackCycle=0;const attackActions=attackClips.map(c=>mixer.clipAction(c));
@@ -35,7 +36,7 @@ const attackClips=clips.filter(c=>/attack|atk|slash|strike|combo|skill|hit|cast/
 function cycleAttack(){if(!mixer||!attackActions.length)return;const a=attackActions[attackCycle++%attackActions.length];a.reset();a.setLoop(THREE.LoopOnce,1);a.clampWhenFinished=true;a.fadeIn(.12);if(currentAction)currentAction.fadeOut(.1);a.play();currentAction=a}
 function play(key){if(!mixer||!clips[key])return;const a=mixer.clipAction(clips[key]);if(currentAction===a)return;a.reset();a.setLoop(key==='die'?THREE.LoopOnce:THREE.LoopRepeat,key==='die'?1:Infinity);a.clampWhenFinished=key==='die';a.fadeIn(.15);if(currentAction)currentAction.fadeOut(.12);a.play();currentAction=a}
 const keys={};addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true;if(e.code==='Space')dodge()});addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
-function face(obj,target){obj.rotation.y=Math.atan2(target.x-obj.position.x,target.z-obj.position.z)}
+function face(obj,target){const yaw=Math.atan2(target.x-obj.position.x,target.z-obj.position.z);obj.rotation.y=yaw;}
 function burst(pos,color=0xff4c9a,count=60){const geo=new THREE.BufferGeometry(),arr=new Float32Array(count*3),vel=[];for(let i=0;i<count;i++){arr[i*3]=pos.x;arr[i*3+1]=pos.y;arr[i*3+2]=pos.z;vel.push(new THREE.Vector3((Math.random()-.5)*5,Math.random()*5,(Math.random()-.5)*5))}geo.setAttribute('position',new THREE.BufferAttribute(arr,3));const mat=new THREE.PointsMaterial({color,size:.13,transparent:true,opacity:1,blending:THREE.AdditiveBlending,depthWrite:false});const pts=new THREE.Points(geo,mat);scene.add(pts);let t=0;effects.push(dt=>{t+=dt;const a=geo.attributes.position;for(let i=0;i<count;i++){a.array[i*3]+=vel[i].x*dt;a.array[i*3+1]+=vel[i].y*dt-2*dt*t;a.array[i*3+2]+=vel[i].z*dt}a.needsUpdate=true;mat.opacity=Math.max(0,1-t/1.1);if(t>1.1){scene.remove(pts);geo.dispose();mat.dispose();return true}})}
 const effects=[];let fireTrailClock=0;function leaveFire(pos){const flame=new THREE.Mesh(new THREE.ConeGeometry(.22,.65,7),new THREE.MeshBasicMaterial({color:Math.random()<.5?0xff4b16:0xffb52e,transparent:true,opacity:.9}));flame.position.set(pos.x,.32,pos.z);flame.rotation.z=(Math.random()-.5)*.5;scene.add(flame);let t=0;effects.push(dt=>{t+=dt;flame.position.y=.32+t*.45;flame.scale.multiplyScalar(1-dt*.7);flame.material.opacity=Math.max(0,.9-t/1.1);if(t>1.1){scene.remove(flame);flame.geometry.dispose();flame.material.dispose();return true}})}
 function slash(from,to,color=0xff63ae){const curve=new THREE.QuadraticBezierCurve3(from,new THREE.Vector3((from.x+to.x)/2,2.6,(from.z+to.z)/2),to);const mesh=new THREE.Mesh(new THREE.TubeGeometry(curve,20,.09,8,false),new THREE.MeshBasicMaterial({color,transparent:true,opacity:1}));scene.add(mesh);let t=0;effects.push(dt=>{t+=dt;mesh.material.opacity=1-t/.35;if(t>.35){scene.remove(mesh);mesh.geometry.dispose();mesh.material.dispose();return true}})}
