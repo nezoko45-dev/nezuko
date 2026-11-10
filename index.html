@@ -10,7 +10,8 @@
 import * as THREE from 'three';
 import {AnimationMixer} from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
-let player;\nconst scene=new THREE.Scene();scene.background=new THREE.Color(0x100611);scene.fog=new THREE.Fog(0x100611,18,48);
+let player;
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x100611);scene.fog=new THREE.Fog(0x100611,18,48);
 const camera=new THREE.PerspectiveCamera(65,innerWidth/innerHeight,.1,150);camera.position.set(0,5,10);
 const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.toneMapping=THREE.ACESFilmicToneMapping;document.body.appendChild(renderer.domElement);
 scene.add(new THREE.HemisphereLight(0xffc5df,0x24102d,2));const sun=new THREE.DirectionalLight(0xffb5d6,3);sun.position.set(5,12,7);sun.castShadow=true;scene.add(sun);
