@@ -46,17 +46,30 @@ function rayBridgeClear(fromCell,toCell){
  ray.set(from,v.normalize());ray.far=v.length();
  return ray.intersectObjects(city.children,false).length===0;
 }
+let rayChasePrevious='';
 function rayChaseStep(actor,target){
- const here=nearestCell(actor.position),goal=nearestCell(target);
- if(rayBridgeClear(here,goal))return goal;
- let best=here,bestScore=Math.hypot(here.x-target.x,here.z-target.z);
+ const here=nearestCell(actor.position),goal=nearestCell(target),hereKey=here.x+','+here.z;
+ const direct=Math.hypot(goal.x-here.x,goal.z-here.z);
+ if(rayBridgeClear(here,goal)){rayChasePrevious=hereKey;return goal}
+ const tx=target.x-here.x,tz=target.z-here.z,tl=Math.hypot(tx,tz)||1;
+ let best=null,bestScore=Infinity;
  for(const [dx,dz] of dirs){
   const candidate=navMap.get((here.x+dx*cell)+','+(here.z+dz*cell));
   if(!candidate||!rayBridgeClear(here,candidate))continue;
-  const score=Math.hypot(candidate.x-target.x,candidate.z-target.z);
+  const key=candidate.x+','+candidate.z;
+  if(key===rayChasePrevious)continue;
+  const dist=Math.hypot(candidate.x-target.x,candidate.z-target.z);
+  const progress=direct-dist;
+  const alignment=((candidate.x-here.x)*tx+(candidate.z-here.z)*tz)/(cell*tl);
+  // Prefer progress, but permit a sideways wall-following step when trapped.
+  const score=dist-progress*.35-alignment*cell*.45;
   if(score<bestScore){best=candidate;bestScore=score}
  }
- return best;
+ if(!best){
+  for(const [dx,dz] of dirs){const q=navMap.get((here.x+dx*cell)+','+(here.z+dz*cell));if(q&&rayBridgeClear(here,q)){best=q;break}}
+ }
+ rayChasePrevious=hereKey;
+ return best||here;
 }
 // Debug ray gizmos: green = clear cell bridge, red = building-blocked bridge. Press G to toggle.
 let navDebugGroup=null,navDebugVisible=false,navDebugClock=0;
