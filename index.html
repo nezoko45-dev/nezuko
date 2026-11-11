@@ -50,30 +50,31 @@ function rayBridgeClear(fromCell,toCell){
 let rayChaseTrail=[];
 function rayChaseStep(actor,target){
  const start=nearestCell(actor.position),goal=nearestCell(target);
- const queue=[start],came=new Map(),seen=new Set([start.x+','+start.z]),goalKey=goal.x+','+goal.z;
- let found=null;
- for(let qi=0;qi<queue.length&&qi<1800;qi++){
-  const n=queue[qi],key=n.x+','+n.z;
-  if(key===goalKey){found=n;break}
-  for(const q of (n.links||[])){
-   const k=q.x+','+q.z;if(seen.has(k)||cellBlocked(q))continue;
-   // Link must represent one of the cell's eight emitted, unobstructed rays.
-   if(!rayBridgeClear(n,q))continue;
-   seen.add(k);came.set(k,n);queue.push(q);
+ if(!start||!goal)return start||{x:actor.position.x,z:actor.position.z};
+ // Cache one cell-to-cell route per target cell; do not BFS every animation frame.
+ const goalKey=goal.x+','+goal.z,startKey=start.x+','+start.z;
+ if(rayRouteGoal!==goalKey||!rayRoutePath.length||rayRoutePath[0].x!==start.x||rayRoutePath[0].z!==start.z){
+  rayRouteGoal=goalKey;
+  const queue=[start],came=new Map(),seen=new Set([startKey]);let found=null;
+  for(let qi=0;qi<queue.length&&qi<700;qi++){
+   const n=queue[qi],key=n.x+','+n.z;
+   if(key===goalKey){found=n;break}
+   for(const q of (n.links||[])){
+    if(!q||cellBlocked(q))continue;const k=q.x+','+q.z;
+    if(seen.has(k)||!rayBridgeClear(n,q))continue;
+    seen.add(k);came.set(k,n);queue.push(q);
+   }
   }
+  if(!found){let best=start,bd=Infinity;for(const n of queue){const d=Math.hypot(n.x-target.x,n.z-target.z);if(d<bd){bd=d;best=n}}found=best}
+  const path=[];let cur=found,guard=0;
+  while(cur&&cur!==start&&guard++<700){path.push(cur);cur=came.get(cur.x+','+cur.z)}
+  path.reverse();rayRoutePath=path;
  }
- if(!found){
-  // Goal cell may not have been generated/linked yet; use reachable frontier cell.
-  let best=start,bd=Infinity;
-  for(const n of queue){const d=Math.hypot(n.x-target.x,n.z-target.z);if(d<bd){bd=d;best=n}}
-  found=best;
- }
- let path=[],cur=found;
- while(cur&&cur!==start){path.push(cur);cur=came.get(cur.x+','+cur.z);if(path.length>1800)break}
- path.reverse();
- rayChaseTrail=path;
- return path[0]||start;
+ // Drop cells already reached and keep the next connected ray bridge.
+ while(rayRoutePath.length&&Math.hypot(actor.position.x-rayRoutePath[0].x,actor.position.z-rayRoutePath[0].z)<.8)rayRoutePath.shift();
+ return rayRoutePath[0]||start;
 }
+let rayRouteGoal='',rayRoutePath=[];
 // Debug ray gizmos: green = clear cell bridge, red = building-blocked bridge. Press G to toggle.
 let navDebugGroup=null,navDebugVisible=false,navDebugClock=0;
 function rebuildNavGizmos(){if(navDebugGroup)scene.remove(navDebugGroup);navDebugGroup=new THREE.Group();const pts=[],cols=[];const edges=[[1,0],[0,1],[1,1],[1,-1]];for(const n of nav)for(const [dx,dz] of edges){const q=nav.find(k=>k.x===n.x+dx*cell&&k.z===n.z+dz*cell);if(!q)continue;const from=new THREE.Vector3(n.x,.16,n.z),to=new THREE.Vector3(q.x,.16,q.z),v=to.clone().sub(from);ray.set(from.clone().setY(.7),v.clone().setY(0).normalize());ray.far=v.length();const blocked=ray.intersectObjects(city.children,false).length>0;pts.push(from.x,from.y,from.z,to.x,to.y,to.z);const color=blocked?new THREE.Color(0xff3030):new THREE.Color(0x35ff75);cols.push(color.r,color.g,color.b,color.r,color.g,color.b)}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(pts,3));geo.setAttribute('color',new THREE.Float32BufferAttribute(cols,3));const lines=new THREE.LineSegments(geo,new THREE.LineBasicMaterial({vertexColors:true,transparent:true,opacity:.85}));navDebugGroup.add(lines);navDebugGroup.visible=navDebugVisible;scene.add(navDebugGroup)}
