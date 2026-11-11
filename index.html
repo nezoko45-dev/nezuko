@@ -97,7 +97,7 @@ function rayChaseStep(actor,target){
 }
 let rayRouteGoal='',rayRoutePath=[];
 // Debug ray gizmos: green = clear cell bridge, red = building-blocked bridge. Press G to toggle.
-let navDebugGroup=null,navDebugVisible=false,navDebugClock=0;
+let navDebugGroup=null,navDebugVisible=false,navDebugClock=0,nezukoRayGizmo=null;
 function rebuildNavGizmos(){if(navDebugGroup)scene.remove(navDebugGroup);navDebugGroup=new THREE.Group();const pts=[],cols=[];const edges=[[1,0],[0,1],[1,1],[1,-1]];for(const n of nav)for(const [dx,dz] of edges){const q=nav.find(k=>k.x===n.x+dx*cell&&k.z===n.z+dz*cell);if(!q)continue;const from=new THREE.Vector3(n.x,.16,n.z),to=new THREE.Vector3(q.x,.16,q.z),v=to.clone().sub(from);ray.set(from.clone().setY(.7),v.clone().setY(0).normalize());ray.far=v.length();const blocked=ray.intersectObjects(city.children,true).length>0;pts.push(from.x,from.y,from.z,to.x,to.y,to.z);const color=blocked?new THREE.Color(0xff3030):new THREE.Color(0x35ff75);cols.push(color.r,color.g,color.b,color.r,color.g,color.b)}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(pts,3));geo.setAttribute('color',new THREE.Float32BufferAttribute(cols,3));const lines=new THREE.LineSegments(geo,new THREE.LineBasicMaterial({vertexColors:true,transparent:true,opacity:.85}));navDebugGroup.add(lines);navDebugGroup.visible=navDebugVisible;scene.add(navDebugGroup)}
 addEventListener('keydown',e=>{if(e.key.toLowerCase()==='g'){navDebugVisible=!navDebugVisible;if(navDebugVisible)rebuildNavGizmos();else if(navDebugGroup)navDebugGroup.visible=false}});
 let fireOrbit=[];let attackCycleIndex=0;const attackClipKeys=['attack','attack_aoe','attack_aoe2'];
@@ -137,16 +137,22 @@ const targetPos=bossTarget.position,dx=targetPos.x-boss.position.x,dz=targetPos.
 if(dist>3.1){
  ensureGridAround(boss.position);
  let best=null,bestScore=Infinity;
- // Scan every grid cell in a 64-unit radius, not just 8 adjacent cells.
+ // Infinite-range grid scan: inspect every currently generated cell; grid expands as Nezuko travels.
+ const rayPts=[],rayCols=[];
  for(const next of nav){
    const ox=next.x-boss.position.x,oz=next.z-boss.position.z,range=Math.hypot(ox,oz);
-   if(range<.5||range>64||cellBlocked(next))continue;
-   const from=new THREE.Vector3(boss.position.x,.75,boss.position.z),to=new THREE.Vector3(next.x,.75,next.z),v=to.clone().sub(from);
+   if(range<.5||cellBlocked(next))continue;
+   const from=new THREE.Vector3(boss.position.x,.9,boss.position.z),to=new THREE.Vector3(next.x,.9,next.z),v=to.clone().sub(from);
    ray.set(from,v.clone().normalize());ray.far=v.length();
-   if(ray.intersectObjects(city.children,true).length)continue;
+   const blocked=ray.intersectObjects(city.children,true).length>0;
+   if(navDebugVisible){rayPts.push(from.x,from.y,from.z,to.x,to.y,to.z);const color=blocked?new THREE.Color(0xff3030):new THREE.Color(0x35ff75);rayCols.push(color.r,color.g,color.b,color.r,color.g,color.b)}
+   if(blocked)continue;
    const targetDistance=Math.hypot(targetPos.x-next.x,targetPos.z-next.z),score=targetDistance+range*.12;
    if(score<bestScore){bestScore=score;best=next}
  }
+ // Show Nezuko's actual cell rays in the G debug gizmo.
+ if(navDebugVisible){if(nezukoRayGizmo)scene.remove(nezukoRayGizmo);nezukoRayGizmo=new THREE.Group();const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(rayPts,3));geo.setAttribute('color',new THREE.Float32BufferAttribute(rayCols,3));nezukoRayGizmo.add(new THREE.LineSegments(geo,new THREE.LineBasicMaterial({vertexColors:true,transparent:true,opacity:.65})));scene.add(nezukoRayGizmo)}
+ else if(nezukoRayGizmo){scene.remove(nezukoRayGizmo);nezukoRayGizmo=null}
  let bridgeMoving=false;
  if(best){const vx=best.x-boss.position.x,vz=best.z-boss.position.z,len=Math.hypot(vx,vz),step=Math.min(6.2*dt,len);
    if(len>.08){boss.position.x+=vx/len*step;boss.position.z+=vz/len*step;bridgeMoving=step>0}}
