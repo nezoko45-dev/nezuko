@@ -96,17 +96,20 @@ function rayChaseStep(actor,target){
  return rayRoutePath[0]||start;
 }
 let rayRouteGoal='',rayRoutePath=[];
-let navDebugVisible=false,navDebugClock=0,nezukoRayGizmo=null;
+let navDebugVisible=false,navDebugClock=0,nezukoRayGizmo=null,feelRayCells=[];
 function updateNezukoFeelRays(){
  if(!boss||!navDebugVisible)return;
  if(!nezukoRayGizmo){nezukoRayGizmo=new THREE.LineSegments(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({vertexColors:true,transparent:true,opacity:.9}));scene.add(nezukoRayGizmo)}
- // One fan stays centered on Nezuko; reach expands/contracts smoothly while she moves.
- const p=[],colors=[],origin=new THREE.Vector3(boss.position.x,1.1,boss.position.z),count=32;
- const reach=2+Math.abs(Math.sin(performance.now()/650))*7;
- for(let i=0;i<count;i++){
-  const angle=i/count*Math.PI*2,ground=new THREE.Vector3(origin.x+Math.cos(angle)*reach,.05,origin.z+Math.sin(angle)*reach);
-  const v=ground.clone().sub(origin);ray.set(origin,v.clone().normalize());ray.far=v.length();
-  const hits=ray.intersectObjects(city.children,true),end=hits.length?hits[0].point:ground;
+ // Each feeler cell holds its own world position. Only that cell releases/recasts
+ // after Nezuko walks away from it; the other cells remain anchored.
+ const count=32,cellRadius=2.5,releaseDistance=3.25;
+ if(feelRayCells.length!==count)feelRayCells=Array.from({length:count},(_,i)=>({angle:i/count*Math.PI*2,pos:null}));
+ const p=[],colors=[],origin=new THREE.Vector3(boss.position.x,1.1,boss.position.z);
+ for(const cellRay of feelRayCells){
+  if(!cellRay.pos||Math.hypot(boss.position.x-cellRay.pos.x,boss.position.z-cellRay.pos.z)>releaseDistance)
+   cellRay.pos=new THREE.Vector3(boss.position.x+Math.cos(cellRay.angle)*cellRadius,.05,boss.position.z+Math.sin(cellRay.angle)*cellRadius);
+  const target=cellRay.pos.clone(),v=target.clone().sub(origin);ray.set(origin,v.clone().normalize());ray.far=v.length();
+  const hits=ray.intersectObjects(city.children,true),end=hits.length?hits[0].point:target;
   p.push(origin.x,origin.y,origin.z,end.x,end.y,end.z);
   const col=hits.length?new THREE.Color(0xff3030):new THREE.Color(0x35ff75);colors.push(col.r,col.g,col.b,col.r,col.g,col.b);
  }
