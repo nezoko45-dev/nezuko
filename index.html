@@ -38,13 +38,12 @@ function findClearSpawn(origin,distance=49){for(let attempt=0;attempt<240;attemp
 function nearestCell(p){let best=null,dist=Infinity;for(const n of nav){if(cellBlocked(n))continue;const d=Math.hypot(n.x-p.x,n.z-p.z);if(d<dist){best=n;dist=d}}return best||nav[0]}
 function navMove(actor,target,speed,dt){ensureGridAround(actor.position);ensureGridAround(target);const start=nearestCell(actor.position),goal=nearestCell(target),step=nextCell(start,goal);if(!step||step===start||cellBlocked(step))return false;const dx=step.x-actor.position.x,dz=step.z-actor.position.z,len=Math.hypot(dx,dz);if(len>.08){actor.position.x+=dx/len*Math.min(speed*dt,len);actor.position.z+=dz/len*Math.min(speed*dt,len)}return true}
 const navMap=new Map(nav.map(n=>[n.x+','+n.z,n])),navKeys=new Set(navMap.keys());let gridCenterX=NaN,gridCenterZ=NaN;
-function ensureGridAround(p){const cx=Math.round(p.x/cell),cz=Math.round(p.z/cell);if(cx===gridCenterX&&cz===gridCenterZ)return;gridCenterX=cx;gridCenterZ=cz;const radius=12;for(let ix=cx-radius;ix<=cx+radius;ix++)for(let iz=cz-radius;iz<=cz+radius;iz++){const x=ix*cell,z=iz*cell,key=x+','+z;if(!navMap.has(key)){const n={x,z,links:[]};navMap.set(key,n);navKeys.add(key);nav.push(n)}}for(let ix=cx-radius-1;ix<=cx+radius+1;ix++)for(let iz=cz-radius-1;iz<=cz+radius+1;iz++){const n=navMap.get(ix*cell+','+iz*cell);if(!n)continue;n.links.length=0;if(cellBlocked(n))continue;for(const [dx,dz] of dirs){const q=navMap.get((n.x+dx*cell)+','+(n.z+dz*cell));if(!q||cellBlocked(q))continue;const from=new THREE.Vector3(n.x,.7,n.z),to=new THREE.Vector3(q.x,.7,q.z),v=to.clone().sub(from);ray.set(from,v.normalize());ray.far=v.length();if(!ray.intersectObjects(city.children,false).length)n.links.push(q)}}}
-// Homemade raycast steering (no BFS): choose a clear neighboring bridge that reduces target distance.
-function rayBridgeClear(fromCell,toCell){
- if(!fromCell||!toCell||cellBlocked(fromCell)||cellBlocked(toCell))return false;
- const from=new THREE.Vector3(fromCell.x,.7,fromCell.z),to=new THREE.Vector3(toCell.x,.7,toCell.z),v=to.clone().sub(from);
- ray.set(from,v.normalize());ray.far=v.length();
- return ray.intersectObjects(city.children,false).length===0;
+function ensureGridAround(p){
+ const cx=Math.round(p.x/cell),cz=Math.round(p.z/cell);if(cx===gridCenterX&&cz===gridCenterZ)return;
+ gridCenterX=cx;gridCenterZ=cz;const radius=12,newCells=[];
+ for(let ix=cx-radius;ix<=cx+radius;ix++)for(let iz=cz-radius;iz<=cz+radius;iz++){const x=ix*cell,z=iz*cell,key=x+','+z;if(!navMap.has(key)){const n={x,z,links:[]};navMap.set(key,n);navKeys.add(key);nav.push(n);newCells.push(n)}}
+ // Cache links: only raycast newly added cells instead of rebuilding the whole moving grid.
+ for(const n of newCells){if(cellBlocked(n))continue;for(const [dx,dz] of dirs){const q=navMap.get((n.x+dx*cell)+','+(n.z+dz*cell));if(!q||cellBlocked(q))continue;const from=new THREE.Vector3(n.x,.7,n.z),to=new THREE.Vector3(q.x,.7,q.z),v=to.clone().sub(from);ray.set(from,v.normalize());ray.far=v.length();if(!ray.intersectObjects(city.children,false).length)n.links.push(q)}}
 }
 // Eight-direction cell-to-cell ray links are built by ensureGridAround.
 let rayChaseTrail=[];
