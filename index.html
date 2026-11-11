@@ -96,10 +96,13 @@ function rayChaseStep(actor,target){
  return rayRoutePath[0]||start;
 }
 let rayRouteGoal='',rayRoutePath=[];
-let navDebugVisible=false,navDebugClock=0,nezukoRayGizmo=null,storedFeelFans=[];
-function castStoredFeelFan(){
+let navDebugVisible=false,navDebugClock=0,nezukoRayGizmo=null;
+function updateNezukoFeelRays(){
  if(!boss||!navDebugVisible)return;
- const anchor=boss.position.clone(),p=[],colors=[],origin=new THREE.Vector3(anchor.x,1.1,anchor.z),count=32,reach=9;
+ if(!nezukoRayGizmo){nezukoRayGizmo=new THREE.LineSegments(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({vertexColors:true,transparent:true,opacity:.9}));scene.add(nezukoRayGizmo)}
+ // One fan stays centered on Nezuko; reach expands/contracts smoothly while she moves.
+ const p=[],colors=[],origin=new THREE.Vector3(boss.position.x,1.1,boss.position.z),count=32;
+ const reach=2+Math.abs(Math.sin(performance.now()/650))*7;
  for(let i=0;i<count;i++){
   const angle=i/count*Math.PI*2,ground=new THREE.Vector3(origin.x+Math.cos(angle)*reach,.05,origin.z+Math.sin(angle)*reach);
   const v=ground.clone().sub(origin);ray.set(origin,v.clone().normalize());ray.far=v.length();
@@ -107,15 +110,8 @@ function castStoredFeelFan(){
   p.push(origin.x,origin.y,origin.z,end.x,end.y,end.z);
   const col=hits.length?new THREE.Color(0xff3030):new THREE.Color(0x35ff75);colors.push(col.r,col.g,col.b,col.r,col.g,col.b);
  }
- const geom=new THREE.BufferGeometry();geom.setAttribute('position',new THREE.Float32BufferAttribute(p,3));geom.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
- const fan=new THREE.LineSegments(geom,new THREE.LineBasicMaterial({vertexColors:true,transparent:true,opacity:.9}));
- fan.position.set(0,0,0);scene.add(fan);storedFeelFans.push({fan,anchor});
-}
-function updateNezukoFeelRays(){
- if(!boss||!navDebugVisible)return;
- // Keep each cast fan fixed in world space; remove it only after Nezuko walks 9 units away.
- for(let i=storedFeelFans.length-1;i>=0;i--){const f=storedFeelFans[i];if(Math.hypot(boss.position.x-f.anchor.x,boss.position.z-f.anchor.z)>9){scene.remove(f.fan);f.fan.geometry.dispose();f.fan.material.dispose();storedFeelFans.splice(i,1)}}
- if(!storedFeelFans.length||Math.hypot(boss.position.x-storedFeelFans[storedFeelFans.length-1].anchor.x,boss.position.z-storedFeelFans[storedFeelFans.length-1].anchor.z)>1.25)castStoredFeelFan();
+ const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+ nezukoRayGizmo.geometry.dispose();nezukoRayGizmo.geometry=g;nezukoRayGizmo.visible=true;
 }
 addEventListener('keydown',e=>{if(e.key.toLowerCase()==='g'){navDebugVisible=!navDebugVisible;if(navDebugVisible){if(boss)updateNezukoFeelRays()}else if(nezukoRayGizmo)nezukoRayGizmo.visible=false}});
 let fireOrbit=[];let attackCycleIndex=0;const attackClipKeys=['attack','attack_aoe','attack_aoe2'];
