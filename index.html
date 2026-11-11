@@ -101,14 +101,15 @@ let navDebugVisible=false,navDebugClock=0,nezukoRayGizmo=null;
 function updateNezukoFeelRays(){
  if(!boss||!navDebugVisible)return;
  if(!nezukoRayGizmo){nezukoRayGizmo=new THREE.LineSegments(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({vertexColors:true,transparent:true,opacity:.9}));scene.add(nezukoRayGizmo)}
- const p=[],colors=[],origin=new THREE.Vector3(boss.position.x,.85,boss.position.z);
- // Re-scan only cells in her tight, moving 12-unit feeler radius; cells left behind are dropped from this frame's geometry.
+ const p=[],colors=[];
+ // Vertical ground probes: each nearby cell gets a ray aimed straight down, never upward.
+ // The 9-unit scan rolls with Nezuko; cells left behind are removed on each refresh.
  const nearby=nav.filter(n=>Math.hypot(n.x-boss.position.x,n.z-boss.position.z)<=9).sort((a,b)=>Math.hypot(a.x-boss.position.x,a.z-boss.position.z)-Math.hypot(b.x-boss.position.x,b.z-boss.position.z));
  for(const n of nearby){
-  const target=new THREE.Vector3(n.x,.35,n.z),v=target.clone().sub(origin),dist=v.length();
-  ray.set(origin,v.normalize());ray.far=Math.max(0,dist-.12);
+  const origin=new THREE.Vector3(n.x,30,n.z),down=new THREE.Vector3(0,-1,0);
+  ray.set(origin,down);ray.far=30;
   const hits=ray.intersectObjects(city.children,true),blocked=cellBlocked(n)||hits.length>0;
-  const end=hits.length?hits[0].point:target;
+  const end=hits.length?hits[0].point:new THREE.Vector3(n.x,.05,n.z);
   p.push(origin.x,origin.y,origin.z,end.x,end.y,end.z);
   const col=blocked?new THREE.Color(0xff3030):new THREE.Color(0x35ff75);
   colors.push(col.r,col.g,col.b,col.r,col.g,col.b);
@@ -171,8 +172,7 @@ if(dist>3.1){
    const score=Math.hypot(targetPos.x-n.x,targetPos.z-n.z);
    if(score<bestScore){bestScore=score;best=n}
  }
- if(navDebugVisible){if(nezukoRayGizmo)scene.remove(nezukoRayGizmo);nezukoRayGizmo=new THREE.Group();const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(rayPts,3));geo.setAttribute('color',new THREE.Float32BufferAttribute(rayCols,3));nezukoRayGizmo.add(new THREE.LineSegments(geo,new THREE.LineBasicMaterial({vertexColors:true,transparent:true,opacity:.65})));scene.add(nezukoRayGizmo)}
- else if(nezukoRayGizmo){scene.remove(nezukoRayGizmo);nezukoRayGizmo=null}
+
  let bridgeMoving=false;
  if(best){const vx=best.x-boss.position.x,vz=best.z-boss.position.z,len=Math.hypot(vx,vz),step=Math.min(6.2*dt,len);
    if(len>.08){boss.position.x+=vx/len*step;boss.position.z+=vz/len*step;bridgeMoving=step>0}}
