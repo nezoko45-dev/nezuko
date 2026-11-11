@@ -103,7 +103,7 @@ function updateNezukoFeelRays(){
  if(!nezukoRayGizmo){nezukoRayGizmo=new THREE.LineSegments(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({vertexColors:true,transparent:true,opacity:.9}));scene.add(nezukoRayGizmo)}
  const p=[],colors=[],origin=new THREE.Vector3(boss.position.x,.85,boss.position.z);
  // Re-scan only cells in her tight, moving 12-unit feeler radius; cells left behind are dropped from this frame's geometry.
- const nearby=nav.filter(n=>Math.hypot(n.x-boss.position.x,n.z-boss.position.z)<=12).sort((a,b)=>Math.hypot(a.x-boss.position.x,a.z-boss.position.z)-Math.hypot(b.x-boss.position.x,b.z-boss.position.z));
+ const nearby=nav.filter(n=>Math.hypot(n.x-boss.position.x,n.z-boss.position.z)<=9).sort((a,b)=>Math.hypot(a.x-boss.position.x,a.z-boss.position.z)-Math.hypot(b.x-boss.position.x,b.z-boss.position.z));
  for(const n of nearby){
   const target=new THREE.Vector3(n.x,.35,n.z),v=target.clone().sub(origin),dist=v.length();
   ray.set(origin,v.normalize());ray.far=Math.max(0,dist-.12);
