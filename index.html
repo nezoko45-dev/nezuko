@@ -136,21 +136,24 @@ if(!bossTarget||now/1000>=bossTargetLockUntil){bossTarget=targets[Math.floor(Mat
 const targetPos=bossTarget.position,dx=targetPos.x-boss.position.x,dz=targetPos.z-boss.position.z,dist=Math.hypot(dx,dz);face(boss,targetPos);
 if(dist>3.1){
  ensureGridAround(boss.position);
- let best=null,bestScore=Infinity;
- // Infinite-range grid scan: inspect every currently generated cell; grid expands as Nezuko travels.
- const rayPts=[],rayCols=[];
- for(const next of nav){
-   const ox=next.x-boss.position.x,oz=next.z-boss.position.z,range=Math.hypot(ox,oz);
-   if(range<.5||cellBlocked(next))continue;
-   const from=new THREE.Vector3(boss.position.x,.9,boss.position.z),to=new THREE.Vector3(next.x,.9,next.z),v=to.clone().sub(from);
+ // Rolling local grid scan: raycast all nearby cells, nearest first.
+ // Movement advances one adjacent grid cell at a time, then the scan rolls with Nezuko.
+ const here=nearestCell(boss.position),nearby=[];
+ for(const n of nav){const range=Math.hypot(n.x-boss.position.x,n.z-boss.position.z);if(range<=24&&range>.25)nearby.push({n,range})}
+ nearby.sort((a,b)=>a.range-b.range);
+ const rayPts=[],rayCols=[];let best=null,bestScore=Infinity;
+ for(const entry of nearby){
+   const n=entry.n,from=new THREE.Vector3(boss.position.x,.9,boss.position.z),to=new THREE.Vector3(n.x,.9,n.z),v=to.clone().sub(from);
    ray.set(from,v.clone().normalize());ray.far=v.length();
-   const blocked=ray.intersectObjects(city.children,true).length>0;
+   const blocked=ray.intersectObjects(city.children,true).length>0||cellBlocked(n);
    if(navDebugVisible){rayPts.push(from.x,from.y,from.z,to.x,to.y,to.z);const color=blocked?new THREE.Color(0xff3030):new THREE.Color(0x35ff75);rayCols.push(color.r,color.g,color.b,color.r,color.g,color.b)}
    if(blocked)continue;
-   const targetDistance=Math.hypot(targetPos.x-next.x,targetPos.z-next.z),score=targetDistance+range*.12;
-   if(score<bestScore){bestScore=score;best=next}
+   // Only step to an immediately connected grid cell (centipede-like crawling).
+   const adjacent=Math.abs(n.x-here.x)<=cell&&Math.abs(n.z-here.z)<=cell&&(n.x!==here.x||n.z!==here.z);
+   if(!adjacent)continue;
+   const score=Math.hypot(targetPos.x-n.x,targetPos.z-n.z);
+   if(score<bestScore){bestScore=score;best=n}
  }
- // Show Nezuko's actual cell rays in the G debug gizmo.
  if(navDebugVisible){if(nezukoRayGizmo)scene.remove(nezukoRayGizmo);nezukoRayGizmo=new THREE.Group();const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(rayPts,3));geo.setAttribute('color',new THREE.Float32BufferAttribute(rayCols,3));nezukoRayGizmo.add(new THREE.LineSegments(geo,new THREE.LineBasicMaterial({vertexColors:true,transparent:true,opacity:.65})));scene.add(nezukoRayGizmo)}
  else if(nezukoRayGizmo){scene.remove(nezukoRayGizmo);nezukoRayGizmo=null}
  let bridgeMoving=false;
