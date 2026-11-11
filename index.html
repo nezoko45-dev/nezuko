@@ -135,12 +135,21 @@ const targets=[player,...survivors];
 if(!bossTarget||now/1000>=bossTargetLockUntil){bossTarget=targets[Math.floor(Math.random()*targets.length)];bossTargetLockUntil=now/1000+11;console.log('Nezuko bridge target:',bossTarget===player?'PLAYER':'SURVIVOR')}
 const targetPos=bossTarget.position,dx=targetPos.x-boss.position.x,dz=targetPos.z-boss.position.z,dist=Math.hypot(dx,dz);face(boss,targetPos);
 if(dist>3.1){
- const spacing=4,dirs8=[[0,1],[1,1],[1,0],[1,-1],[0,-1],[-1,-1],[-1,0],[-1,1]],here={x:Math.round(boss.position.x/spacing)*spacing,z:Math.round(boss.position.z/spacing)*spacing};let best=null,bestScore=Infinity;
- // Each candidate cell is a bridge only if the ray from current position is clear.
- for(const [sx,sz] of dirs8){const next={x:here.x+sx*spacing,z:here.z+sz*spacing},from=new THREE.Vector3(boss.position.x,.75,boss.position.z),to=new THREE.Vector3(next.x,.75,next.z),v=to.clone().sub(from);ray.set(from,v.normalize());ray.far=v.length();if(ray.intersectObjects(city.children,true).length)continue;
- let occupied=false;for(const group of city.children){for(const obj of group.children){const box=obj.userData.navBox;if(box&&next.x+.7>box.min.x&&next.x-.7<box.max.x&&next.z+.7>box.min.z&&next.z-.7<box.max.z){occupied=true;break}}if(occupied)break}if(occupied)continue;
- const score=Math.hypot(targetPos.x-next.x,targetPos.z-next.z);if(score<bestScore){bestScore=score;best=next}}
- let bridgeMoving=false;if(best){const vx=best.x-boss.position.x,vz=best.z-boss.position.z,len=Math.hypot(vx,vz),step=Math.min(6.2*dt,len);if(len>.08){boss.position.x+=vx/len*step;boss.position.z+=vz/len*step;bridgeMoving=step>0}}
+ ensureGridAround(boss.position);
+ let best=null,bestScore=Infinity;
+ // Scan every grid cell in a 64-unit radius, not just 8 adjacent cells.
+ for(const next of nav){
+   const ox=next.x-boss.position.x,oz=next.z-boss.position.z,range=Math.hypot(ox,oz);
+   if(range<.5||range>64||cellBlocked(next))continue;
+   const from=new THREE.Vector3(boss.position.x,.75,boss.position.z),to=new THREE.Vector3(next.x,.75,next.z),v=to.clone().sub(from);
+   ray.set(from,v.clone().normalize());ray.far=v.length();
+   if(ray.intersectObjects(city.children,true).length)continue;
+   const targetDistance=Math.hypot(targetPos.x-next.x,targetPos.z-next.z),score=targetDistance+range*.12;
+   if(score<bestScore){bestScore=score;best=next}
+ }
+ let bridgeMoving=false;
+ if(best){const vx=best.x-boss.position.x,vz=best.z-boss.position.z,len=Math.hypot(vx,vz),step=Math.min(6.2*dt,len);
+   if(len>.08){boss.position.x+=vx/len*step;boss.position.z+=vz/len*step;bridgeMoving=step>0}}
  if(bridgeMoving){if(currentState!=='walk'&&clips.walk)play('walk');attackTimer=0}
 }else if(now/1000>=attackAt){attackAt=now/1000+BOSS_ATTACK_INTERVAL;fireball(bossTarget)}
 if(dist>8&&currentState==='attack'){if(currentAction){currentAction.stop();currentAction=null}currentState='idle';attackTimer=0}
