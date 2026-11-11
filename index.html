@@ -58,24 +58,17 @@ function ensureGridAround(p){
  for(const n of newCells){if(cellBlocked(n))continue;for(const [dx,dz] of dirs){const q=navMap.get((n.x+dx*cell)+','+(n.z+dz*cell));if(!q||cellBlocked(q))continue;const from=new THREE.Vector3(n.x,.7,n.z),to=new THREE.Vector3(q.x,.7,q.z),v=to.clone().sub(from);ray.set(from,v.normalize());ray.far=v.length();if(!ray.intersectObjects(city.children,true).length)n.links.push(q)}}
 }
 function raycastOpenMove(actor,target,dt){
- const step=2.4,origin=new THREE.Vector3(actor.position.x,1.25,actor.position.z);
- const blockedAt=(x,z)=>{for(const chunk of city.children)for(const b of chunk.children){const box=b.userData.navBox;if(box&&x+.65>box.min.x&&x-.65<box.max.x&&z+.65>box.min.z&&z-.65<box.max.z)return true}return false};
- const desired=Math.atan2(target.x-actor.position.x,target.z-actor.position.z);let best=null,bestScore=Infinity;
- // Sweep 16 directions with forward raycasts and destination occupancy checks.
- for(let i=0;i<16;i++){const angle=desired+i*Math.PI/8,dir=new THREE.Vector3(Math.sin(angle),0,Math.cos(angle)),nx=actor.position.x+dir.x*step,nz=actor.position.z+dir.z*step;
-  ray.set(origin,dir);ray.far=step+.7;const hits=ray.intersectObjects(city.children,true);
-  if(hits.length&&hits[0].distance<step+.45)continue;
-  if(blockedAt(nx,nz))continue;
-  const score=Math.hypot(target.x-nx,target.z-nz)+Math.abs(i)*.015;
-  if(score<bestScore){bestScore=score;best=dir}
- }
- // If every forward ray is blocked, choose the least-blocked nearby side cell.
- if(!best){for(let i=0;i<8;i++){const a=i*Math.PI/4,d=new THREE.Vector3(Math.sin(a),0,Math.cos(a)),nx=actor.position.x+d.x*1.2,nz=actor.position.z+d.z*1.2;if(!blockedAt(nx,nz)){best=d;break}}}
- if(best){const speed=3.2;actor.position.x+=best.x*speed*dt;actor.position.z+=best.z*speed*dt;return true}
- return false;
+ const speed=5.2,step=Math.max(.18,speed*dt),dx=target.x-actor.position.x,dz=target.z-actor.position.z,dist=Math.hypot(dx,dz);if(dist<.001)return false;
+ const desired=Math.atan2(dx,dz),candidates=[];
+ for(let i=0;i<16;i++){const offset=i===0?0:Math.ceil(i/2)*(i%2?1:-1)*Math.PI/8,a=desired+offset;candidates.push(new THREE.Vector3(Math.sin(a),0,Math.cos(a)))}
+ const blockedAt=(x,z)=>{for(const chunk of city.children)for(const b of chunk.children){const box=b.userData.navBox;if(box&&x+.7>box.min.x&&x-.7<box.max.x&&z+.7>box.min.z&&z-.7<box.max.z)return true}return false};
+ let escapeX=0,escapeZ=0,inside=false;
+ for(const chunk of city.children)for(const b of chunk.children){const box=b.userData.navBox;if(box&&actor.position.x>box.min.x&&actor.position.x<box.max.x&&actor.position.z>box.min.z&&actor.position.z<box.max.z){inside=true;const ex=Math.min(actor.position.x-box.min.x,box.max.x-actor.position.x),ez=Math.min(actor.position.z-box.min.z,box.max.z-actor.position.z);if(ex<ez)escapeX=actor.position.x-box.min.x<box.max.x-actor.position.x?-1:1;else escapeZ=actor.position.z-box.min.z<box.max.z-actor.position.z?-1:1}}
+ if(inside){actor.position.x+=escapeX*step;actor.position.z+=escapeZ*step;return true}
+ let best=null,bestScore=Infinity;for(const d of candidates){const nx=actor.position.x+d.x*step,nz=actor.position.z+d.z*step;if(blockedAt(nx,nz))continue;const score=Math.hypot(target.x-nx,target.z-nz);if(score<bestScore){bestScore=score;best=d}}
+ if(!best){const d=new THREE.Vector3(dx/dist,0,dz/dist);for(let k=4;k>=1;k--){if(!blockedAt(actor.position.x+d.x*step*k/4,actor.position.z+d.z*step*k/4)){best=d;break}}}
+ if(!best)return false;actor.position.x+=best.x*step;actor.position.z+=best.z*step;return true;
 }
-// Eight-direction cell-to-cell ray links are built by ensureGridAround.
-let rayChaseTrail=[];
 function rayChaseStep(actor,target){
  const start=nearestCell(actor.position),goal=nearestCell(target);
  if(!start||!goal)return start||{x:actor.position.x,z:actor.position.z};
