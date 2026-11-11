@@ -58,16 +58,16 @@ function ensureGridAround(p){
  for(const n of newCells){if(cellBlocked(n))continue;for(const [dx,dz] of dirs){const q=navMap.get((n.x+dx*cell)+','+(n.z+dz*cell));if(!q||cellBlocked(q))continue;const from=new THREE.Vector3(n.x,.7,n.z),to=new THREE.Vector3(q.x,.7,q.z),v=to.clone().sub(from);ray.set(from,v.normalize());ray.far=v.length();if(!ray.intersectObjects(city.children,true).length)n.links.push(q)}}
 }
 function raycastOpenMove(actor,target,dt){
- const speed=5.2,step=Math.max(.18,speed*dt),dx=target.x-actor.position.x,dz=target.z-actor.position.z,dist=Math.hypot(dx,dz);if(dist<.001)return false;
- const desired=Math.atan2(dx,dz),candidates=[];
- for(let i=0;i<16;i++){const offset=i===0?0:Math.ceil(i/2)*(i%2?1:-1)*Math.PI/8,a=desired+offset;candidates.push(new THREE.Vector3(Math.sin(a),0,Math.cos(a)))}
- const blockedAt=(x,z)=>{for(const chunk of city.children)for(const b of chunk.children){const box=b.userData.navBox;if(box&&x+.7>box.min.x&&x-.7<box.max.x&&z+.7>box.min.z&&z-.7<box.max.z)return true}return false};
- let escapeX=0,escapeZ=0,inside=false;
- for(const chunk of city.children)for(const b of chunk.children){const box=b.userData.navBox;if(box&&actor.position.x>box.min.x&&actor.position.x<box.max.x&&actor.position.z>box.min.z&&actor.position.z<box.max.z){inside=true;const ex=Math.min(actor.position.x-box.min.x,box.max.x-actor.position.x),ez=Math.min(actor.position.z-box.min.z,box.max.z-actor.position.z);if(ex<ez)escapeX=actor.position.x-box.min.x<box.max.x-actor.position.x?-1:1;else escapeZ=actor.position.z-box.min.z<box.max.z-actor.position.z?-1:1}}
- if(inside){actor.position.x+=escapeX*step;actor.position.z+=escapeZ*step;return true}
- let best=null,bestScore=Infinity;for(const d of candidates){const nx=actor.position.x+d.x*step,nz=actor.position.z+d.z*step;if(blockedAt(nx,nz))continue;const score=Math.hypot(target.x-nx,target.z-nz);if(score<bestScore){bestScore=score;best=d}}
- if(!best){const d=new THREE.Vector3(dx/dist,0,dz/dist);for(let k=4;k>=1;k--){if(!blockedAt(actor.position.x+d.x*step*k/4,actor.position.z+d.z*step*k/4)){best=d;break}}}
- if(!best)return false;actor.position.x+=best.x*step;actor.position.z+=best.z*step;return true;
+ // Guaranteed locomotion: move the boss group itself toward its locked target.
+ const dx=target.x-actor.position.x,dz=target.z-actor.position.z,d=Math.hypot(dx,dz);
+ if(d<3.2)return false;
+ const speed=5.5,step=Math.min(speed*dt,d-3.0),nx=dx/d,nz=dz/d;
+ // Try the direct direction, then lateral directions if a building blocks it.
+ const blockedAt=(x,z)=>{for(const chunk of city.children)for(const b of chunk.children){const box=b.userData.navBox;if(box&&x+.55>box.min.x&&x-.55<box.max.x&&z+.55>box.min.z&&z-.55<box.max.z)return true}return false};
+ const options=[[nx,nz],[nz,-nx],[-nz,nx],[-nx,-nz]];
+ for(const [x,z] of options){if(!blockedAt(actor.position.x+x*step,actor.position.z+z*step)){actor.position.x+=x*step;actor.position.z+=z*step;return true}}
+ // Last-resort chase: do not freeze the AI if collision boxes overlap.
+ actor.position.x+=nx*Math.min(step,.12);actor.position.z+=nz*Math.min(step,.12);return true;
 }
 function rayChaseStep(actor,target){
  const start=nearestCell(actor.position),goal=nearestCell(target);
