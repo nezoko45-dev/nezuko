@@ -107,8 +107,9 @@ function updateNezukoFeelRays(){
  for(const n of nearby){
   const target=new THREE.Vector3(n.x,.35,n.z),v=target.clone().sub(origin),dist=v.length();
   ray.set(origin,v.normalize());ray.far=Math.max(0,dist-.12);
-  const blocked=cellBlocked(n)||ray.intersectObjects(city.children,true).length>0;
-  p.push(origin.x,origin.y,origin.z,target.x,target.y,target.z);
+  const hits=ray.intersectObjects(city.children,true),blocked=cellBlocked(n)||hits.length>0;
+  const end=hits.length?hits[0].point:target;
+  p.push(origin.x,origin.y,origin.z,end.x,end.y,end.z);
   const col=blocked?new THREE.Color(0xff3030):new THREE.Color(0x35ff75);
   colors.push(col.r,col.g,col.b,col.r,col.g,col.b);
  }
@@ -162,8 +163,8 @@ if(dist>3.1){
  for(const entry of nearby){
    const n=entry.n,from=new THREE.Vector3(boss.position.x,.9,boss.position.z),to=new THREE.Vector3(n.x,.9,n.z),v=to.clone().sub(from);
    ray.set(from,v.clone().normalize());ray.far=v.length();
-   const blocked=ray.intersectObjects(city.children,true).length>0||cellBlocked(n);
-   if(navDebugVisible){rayPts.push(from.x,from.y,from.z,to.x,to.y,to.z);const color=blocked?new THREE.Color(0xff3030):new THREE.Color(0x35ff75);rayCols.push(color.r,color.g,color.b,color.r,color.g,color.b)}
+   const hits=ray.intersectObjects(city.children,true),blocked=hits.length>0||cellBlocked(n);
+   if(navDebugVisible){const end=hits.length?hits[0].point:to;rayPts.push(from.x,from.y,from.z,end.x,end.y,end.z);const color=blocked?new THREE.Color(0xff3030):new THREE.Color(0x35ff75);rayCols.push(color.r,color.g,color.b,color.r,color.g,color.b)}
    if(blocked)continue;
    // Only step to an immediately connected grid cell (centipede-like crawling).
    const adjacent=Math.abs(n.x-here.x)<=cell&&Math.abs(n.z-here.z)<=cell&&(n.x!==here.x||n.z!==here.z);
