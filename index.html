@@ -101,20 +101,14 @@ let navDebugVisible=false,navDebugClock=0,nezukoRayGizmo=null;
 function updateNezukoFeelRays(){
  if(!boss||!navDebugVisible)return;
  if(!nezukoRayGizmo){nezukoRayGizmo=new THREE.LineSegments(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({vertexColors:true,transparent:true,opacity:.9}));scene.add(nezukoRayGizmo)}
- const p=[],colors=[];
- // Vertical ground probes: each nearby cell gets a ray aimed straight down, never upward.
- // The 9-unit scan rolls with Nezuko; cells left behind are removed on each refresh.
- const nearby=nav.filter(n=>Math.hypot(n.x-boss.position.x,n.z-boss.position.z)<=9).sort((a,b)=>Math.hypot(a.x-boss.position.x,a.z-boss.position.z)-Math.hypot(b.x-boss.position.x,b.z-boss.position.z));
- for(const n of nearby){
-  const origin=new THREE.Vector3(n.x,30,n.z),down=new THREE.Vector3(0,-1,0);
-  ray.set(origin,down);ray.far=30;
-  const hits=ray.intersectObjects(city.children,true),blocked=cellBlocked(n)||hits.length>0;
-  const end=hits.length?hits[0].point:new THREE.Vector3(n.x,.05,n.z);
-  p.push(origin.x,origin.y,origin.z,end.x,end.y,end.z);
-  const col=blocked?new THREE.Color(0xff3030):new THREE.Color(0x35ff75);
-  colors.push(col.r,col.g,col.b,col.r,col.g,col.b);
- }
- const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+ // Keep the probe centered on Nezuko: one vertical ray directly beneath her.
+ const x=boss.position.x,z=boss.position.z,origin=new THREE.Vector3(x,30,z),down=new THREE.Vector3(0,-1,0);
+ ray.set(origin,down);ray.far=30;
+ const hits=ray.intersectObjects(city.children,true),cellUnder=nearestCell(boss.position),blocked=(!!cellUnder&&cellBlocked(cellUnder))||hits.length>0;
+ const end=hits.length?hits[0].point:new THREE.Vector3(x,.05,z);
+ const p=[origin.x,origin.y,origin.z,end.x,end.y,end.z],col=blocked?new THREE.Color(0xff3030):new THREE.Color(0x35ff75);
+ const colors=[col.r,col.g,col.b,col.r,col.g,col.b],g=new THREE.BufferGeometry();
+ g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
  nezukoRayGizmo.geometry.dispose();nezukoRayGizmo.geometry=g;nezukoRayGizmo.visible=true;
 }
 addEventListener('keydown',e=>{if(e.key.toLowerCase()==='g'){navDebugVisible=!navDebugVisible;if(navDebugVisible){if(boss)updateNezukoFeelRays()}else if(nezukoRayGizmo)nezukoRayGizmo.visible=false}});
