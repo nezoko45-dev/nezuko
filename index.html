@@ -101,17 +101,14 @@ let navDebugVisible=false,navDebugClock=0,nezukoRayGizmo=null;
 function updateNezukoFeelRays(){
  if(!boss||!navDebugVisible)return;
  if(!nezukoRayGizmo){nezukoRayGizmo=new THREE.LineSegments(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({vertexColors:true,transparent:true,opacity:.9}));scene.add(nezukoRayGizmo)}
- // Blind ground-feeler fan: rays sweep 360 degrees from Nezuko and angle down toward nearby ground.
- // Rebuilt every refresh so the fan releases old positions as she moves.
- const p=[],colors=[],origin=new THREE.Vector3(boss.position.x,1.05,boss.position.z),count=32,radius=9;
+ // Ground-geometry feeler fan: rays radiate around Nezuko and slope down to the terrain.
+ const p=[],colors=[],origin=new THREE.Vector3(boss.position.x,1.1,boss.position.z),count=32,reach=9;
  for(let i=0;i<count;i++){
-  const angle=i/count*Math.PI*2,ground=new THREE.Vector3(origin.x+Math.cos(angle)*radius,.05,origin.z+Math.sin(angle)*radius);
-  const v=ground.clone().sub(origin),dist=v.length();ray.set(origin,v.normalize());ray.far=dist;
-  const hits=ray.intersectObjects(city.children,true),blocked=hits.length>0;
-  const end=blocked?hits[0].point:ground;
+  const angle=i/count*Math.PI*2,ground=new THREE.Vector3(origin.x+Math.cos(angle)*reach,.05,origin.z+Math.sin(angle)*reach);
+  const v=ground.clone().sub(origin);ray.set(origin,v.clone().normalize());ray.far=v.length();
+  const hits=ray.intersectObjects(city.children,true),end=hits.length?hits[0].point:ground;
   p.push(origin.x,origin.y,origin.z,end.x,end.y,end.z);
-  const col=blocked?new THREE.Color(0xff3030):new THREE.Color(0x35ff75);
-  colors.push(col.r,col.g,col.b,col.r,col.g,col.b);
+  const col=hits.length?new THREE.Color(0xff3030):new THREE.Color(0x35ff75);colors.push(col.r,col.g,col.b,col.r,col.g,col.b);
  }
  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
  nezukoRayGizmo.geometry.dispose();nezukoRayGizmo.geometry=g;nezukoRayGizmo.visible=true;
@@ -152,29 +149,22 @@ const targets=[player,...survivors];
 if(!bossTarget||now/1000>=bossTargetLockUntil){bossTarget=targets[Math.floor(Math.random()*targets.length)];bossTargetLockUntil=now/1000+11;console.log('Nezuko bridge target:',bossTarget===player?'PLAYER':'SURVIVOR')}
 const targetPos=bossTarget.position,dx=targetPos.x-boss.position.x,dz=targetPos.z-boss.position.z,dist=Math.hypot(dx,dz);face(boss,targetPos);
 if(dist>3.1){
- ensureGridAround(boss.position);
- // Rolling local grid scan: raycast all nearby cells, nearest first.
- // Movement advances one adjacent grid cell at a time, then the scan rolls with Nezuko.
- const here=nearestCell(boss.position),nearby=[];
- for(const n of nav){const range=Math.hypot(n.x-boss.position.x,n.z-boss.position.z);if(range<=24&&range>.25)nearby.push({n,range})}
- nearby.sort((a,b)=>a.range-b.range);
- const rayPts=[],rayCols=[];let best=null,bestScore=Infinity;
- for(const entry of nearby){
-   const n=entry.n,from=new THREE.Vector3(boss.position.x,.9,boss.position.z),to=new THREE.Vector3(n.x,.9,n.z),v=to.clone().sub(from);
-   ray.set(from,v.clone().normalize());ray.far=v.length();
-   const hits=ray.intersectObjects(city.children,true),blocked=hits.length>0||cellBlocked(n);
-   if(navDebugVisible){const end=hits.length?hits[0].point:to;rayPts.push(from.x,from.y,from.z,end.x,end.y,end.z);const color=blocked?new THREE.Color(0xff3030):new THREE.Color(0x35ff75);rayCols.push(color.r,color.g,color.b,color.r,color.g,color.b)}
-   if(blocked)continue;
-   // Only step to an immediately connected grid cell (centipede-like crawling).
-   const adjacent=Math.abs(n.x-here.x)<=cell&&Math.abs(n.z-here.z)<=cell&&(n.x!==here.x||n.z!==here.z);
-   if(!adjacent)continue;
-   const score=Math.hypot(targetPos.x-n.x,targetPos.z-n.z);
-   if(score<bestScore){bestScore=score;best=n}
+ // Continuous ground/object sensing—no nav cells or grid graph.
+ const from=new THREE.Vector3(boss.position.x,.85,boss.position.z),desired=Math.atan2(targetPos.z-boss.position.z,targetPos.x-boss.position.x);
+ let bestAngle=desired,bestScore=Infinity,clearFound=false;
+ // Probe 24 candidate headings around her, using geometry raycasts to reject walls/buildings.
+ for(let j=0;j<24;j++){
+  const angle=j/24*Math.PI*2,dir=new THREE.Vector3(Math.cos(angle),0,Math.sin(angle));
+  ray.set(from,dir);ray.far=3.4;
+  const hits=ray.intersectObjects(city.children,true),clear=!hits.length;
+  if(!clear)continue;
+  const delta=Math.atan2(Math.sin(angle-desired),Math.cos(angle-desired)),score=Math.abs(delta);
+  if(score<bestScore){bestScore=score;bestAngle=angle;clearFound=true}
  }
-
+ // If directly aimed route is open, it naturally wins; otherwise pick the clearest heading closest to target.
  let bridgeMoving=false;
- if(best){const vx=best.x-boss.position.x,vz=best.z-boss.position.z,len=Math.hypot(vx,vz),step=Math.min(6.2*dt,len);
-   if(len>.08){boss.position.x+=vx/len*step;boss.position.z+=vz/len*step;bridgeMoving=step>0}}
+ if(clearFound){const vx=Math.cos(bestAngle),vz=Math.sin(bestAngle),step=Math.min(6.2*dt,dist);
+  boss.position.x+=vx*step;boss.position.z+=vz*step;bridgeMoving=step>0}
  if(bridgeMoving){if(currentState!=='walk'&&clips.walk)play('walk');attackTimer=0}
 }else if(now/1000>=attackAt){attackAt=now/1000+BOSS_ATTACK_INTERVAL;fireball(bossTarget)}
 if(dist>8&&currentState==='attack'){if(currentAction){currentAction.stop();currentAction=null}currentState='idle';attackTimer=0}
