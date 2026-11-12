@@ -92,33 +92,27 @@ const targets=[player,...survivors];
 if(!bossTarget||now/1000>=bossTargetLockUntil){bossTarget=targets[Math.floor(Math.random()*targets.length)];bossTargetLockUntil=now/1000+11;console.log('Nezuko ray target:',bossTarget===player?'PLAYER':'SURVIVOR')}
 const targetPos=bossTarget.position,dx=targetPos.x-boss.position.x,dz=targetPos.z-boss.position.z,dist=Math.hypot(dx,dz);face(boss,targetPos);
 if(dist>3.1){
- const rayCount=360,rayRange=8,rayOrigin=new THREE.Vector3(boss.position.x,boss.position.y+1.05,boss.position.z);raycaster.far=rayRange;
- if(!rayVisual){rayVisualPositions=new Float32Array(rayCount*6);rayVisualColors=new Float32Array(rayCount*6);rayVisualGeometry=new THREE.BufferGeometry();rayVisualGeometry.setAttribute('position',new THREE.BufferAttribute(rayVisualPositions,3));rayVisualGeometry.setAttribute('color',new THREE.BufferAttribute(rayVisualColors,3));rayVisual=new THREE.LineSegments(rayVisualGeometry,new THREE.LineBasicMaterial({vertexColors:true,transparent:true,opacity:.72}));rayVisual.frustumCulled=false;scene.add(rayVisual);for(let i=0;i<rayCount;i++){const a=i/rayCount*Math.PI*2;rayDirs.push(new THREE.Vector3(Math.cos(a),0,Math.sin(a)));rayLengths[i]=rayRange}}
- let bestAngle=0,bestScore=-Infinity,found=false;const desired=Math.atan2(dz,dx);
- const obstacles=city.children;
- for(let i=0;i<rayCount;i++){
-  raycaster.set(rayOrigin,rayDirs[i]);const hits=raycaster.intersectObjects(obstacles,true);
-  const hit=hits.find(h=>h.object.userData.navBox||h.object.isMesh);
-  const clear=!hit;rayScores[i]=clear?1:0;rayLengths[i]=clear?rayRange:Math.max(.08,hit.distance);
-  const angle=i/rayCount*Math.PI*2,alignment=(Math.cos(angle-desired)+1)*.5;
-  // Binary safety is decisive; clear rays toward target win, with a mild clearance tie-break.
-  const score=rayScores[i]?(alignment*4+rayLengths[i]*.025):-1;
-  if(score>bestScore){bestScore=score;bestAngle=angle;found=!!rayScores[i]}
-  const k=i*6,end=rayOrigin.clone().addScaledVector(rayDirs[i],rayLengths[i]);
-  rayVisualPositions[k]=rayOrigin.x;rayVisualPositions[k+1]=rayOrigin.y;rayVisualPositions[k+2]=rayOrigin.z;
-  rayVisualPositions[k+3]=end.x;rayVisualPositions[k+4]=end.y;rayVisualPositions[k+5]=end.z;
-  const color=clear?[.18,.95,.42]:[1,.12,.2];rayVisualColors.set(color,k);rayVisualColors.set(color,k+3);
+ // Ground score map: 0 = blocked footprint, 1 = open ground. No raycasts.
+ const scoreStep=2,scoreRadius=12,scoreMap=new Map(),buildings=[];
+ for(const group of city.children)for(const obj of group.children)if(obj.userData.navBox)buildings.push(obj.userData.navBox);
+ const cellScore=(gx,gz)=>{const key=gx+','+gz;if(scoreMap.has(key))return scoreMap.get(key);const x=gx*scoreStep,z=gz*scoreStep;let score=1;for(const b of buildings){if(b.max.y<.1)continue;if(x+1.05>b.min.x&&x-1.05<b.max.x&&z+1.05>b.min.z&&z-1.05<b.max.z){score=0;break}}scoreMap.set(key,score);return score};
+ const baseX=Math.round(boss.position.x/scoreStep),baseZ=Math.round(boss.position.z/scoreStep);
+ let bestAngle=bossRayHeading,bestScore=-Infinity,found=false;
+ const desired=Math.atan2(dz,dx);
+ for(let a=0;a<360;a++){
+  const angle=a*Math.PI/180,vx=Math.cos(angle),vz=Math.sin(angle);let open=0,blocked=0,firstBlocked=99;
+  for(let n=1;n<=6;n++){const gx=Math.round((boss.position.x+vx*n*scoreStep)/scoreStep),gz=Math.round((boss.position.z+vz*n*scoreStep)/scoreStep);const s=cellScore(gx,gz);if(s===1)open++;else{blocked++;firstBlocked=Math.min(firstBlocked,n)}}
+  const align=(Math.cos(angle-desired)+1)*.5,turn=(Math.cos(angle-bossRayHeading)+1)*.5;
+  const score=open*2.2-blocked*5+align*3+turn*.8+firstBlocked*.12;
+  if(blocked===0||firstBlocked>1){if(score>bestScore){bestScore=score;bestAngle=angle;found=true}}
  }
- rayVisualGeometry.attributes.position.needsUpdate=true;rayVisualGeometry.attributes.color.needsUpdate=true;rayVisualGeometry.computeBoundingSphere();
- // Smoothly turn toward the selected clear ray instead of snapping.
+ // Ground score tiles are the sole navigation data; steering follows the best open corridor.
  if(found){
   let delta=Math.atan2(Math.sin(bestAngle-bossRayHeading),Math.cos(bestAngle-bossRayHeading));
-  bossRayHeading+=Math.max(-dt*4.2,Math.min(dt*4.2,delta));
-  const step=Math.min(6.2*dt,Math.max(.08,dist-2.8)),vx=Math.cos(bossRayHeading),vz=Math.sin(bossRayHeading);
-  // Short forward confirmation ray prevents a frame-step collision.
-  raycaster.far=step+.65;raycaster.set(rayOrigin,new THREE.Vector3(vx,0,vz));
-  const frontHit=raycaster.intersectObjects(obstacles,true).length>0;
-  if(!frontHit){boss.position.x+=vx*step;boss.position.z+=vz*step;if(currentState!=='walk'&&clips.walk)play('walk');attackTimer=0}
+  bossRayHeading+=Math.max(-dt*3.8,Math.min(dt*3.8,delta));
+  const step=Math.min(5.2*dt,Math.max(.08,dist-2.8)),vx=Math.cos(bossRayHeading),vz=Math.sin(bossRayHeading);
+  const nx=boss.position.x+vx*step,nz=boss.position.z+vz*step;
+  if(cellScore(Math.round(nx/scoreStep),Math.round(nz/scoreStep))===1){boss.position.x=nx;boss.position.z=nz;if(currentState!=='walk'&&clips.walk)play('walk');attackTimer=0}
  }
 }else if(now/1000>=attackAt){attackAt=now/1000+BOSS_ATTACK_INTERVAL;fireball(bossTarget)}
 if(dist>8&&currentState==='attack'){if(currentAction){currentAction.stop();currentAction=null}currentState='idle';attackTimer=0}
