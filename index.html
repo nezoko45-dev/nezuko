@@ -92,24 +92,31 @@ const targets=[player,...survivors];
 if(!bossTarget||now/1000>=bossTargetLockUntil){bossTarget=targets[Math.floor(Math.random()*targets.length)];bossTargetLockUntil=now/1000+11;console.log('Nezuko bridge target:',bossTarget===player?'PLAYER':'SURVIVOR')}
 const targetPos=bossTarget.position,dx=targetPos.x-boss.position.x,dz=targetPos.z-boss.position.z,dist=Math.hypot(dx,dz);face(boss,targetPos);
 if(dist>3.1){
- // SCORE-BASED DIRECTIONAL STEERING: no raycasts, no grid/path bridge.
+ // BINARY DIRECTION SCORING: 1 = safe/open, 0 = blocked. No rays or grid steering.
  const desired=Math.atan2(targetPos.z-boss.position.z,targetPos.x-boss.position.x);
- const obstacleAt=(x,z)=>{for(const chunk of city.children)for(const b of chunk.children){const box=b.userData.navBox;if(box&&x+.62>box.min.x&&x-.62<box.max.x&&z+.62>box.min.z&&z-.62<box.max.z)return true}return false};
- let bestAngle=desired,bestScore=-1,scoreFound=false;
- // Every heading gets a binary safety score: 1 = collision-free, 0 = blocked.
- for(let j=0;j<32;j++){
-  const angle=j/32*Math.PI*2,vx=Math.cos(angle),vz=Math.sin(angle),probe=3.5;
-  let safety=1;
-  // Check several points along the candidate movement segment using collision boxes (not rays).
-  for(let k=1;k<=5;k++){const t=probe*k/5;if(obstacleAt(boss.position.x+vx*t,boss.position.z+vz*t)){safety=0;break}}
-  if(safety===0)continue;
+ const obstacleAt=(x,z)=>{for(const chunk of city.children)for(const b of chunk.children){const box=b.userData.navBox;if(box&&x+.7>box.min.x&&x-.7<box.max.x&&z+.7>box.min.z&&z-.7<box.max.z)return true}return false};
+ let bestAngle=desired,bestScore=-Infinity,scoreFound=false;
+ const headingCount=64,moveStep=Math.min(6.2*dt,Math.max(.08,dist-2.8));
+ for(let j=0;j<headingCount;j++){
+  const angle=j/headingCount*Math.PI*2,vx=Math.cos(angle),vz=Math.sin(angle);
+  // A direction is OPEN only if the immediate step is clear; otherwise its binary score is 0.
+  const immediateOpen=!obstacleAt(boss.position.x+vx*moveStep,boss.position.z+vz*moveStep);
+  const safetyScore=immediateOpen?1:0;
+  if(!safetyScore)continue;
+  // Look ahead in small increments; longer clear corridors earn a bonus.
+  let openDistance=0;
+  for(let d=.35;d<=5.25;d+=.35){
+   if(obstacleAt(boss.position.x+vx*d,boss.position.z+vz*d))break;
+   openDistance=d;
+  }
   const alignment=(Math.cos(angle-desired)+1)*.5;
-  const score=safety*(.35+.65*alignment);
+  const score=safetyScore* (alignment*3.0 + openDistance*.8 + (openDistance>=5.2?1.5:0));
   if(score>bestScore){bestScore=score;bestAngle=angle;scoreFound=true}
  }
+ // Escape fallback: if boxed in, try tiny collision-safe moves in all 64 headings.
+ if(!scoreFound){for(let j=0;j<headingCount;j++){const a=j/headingCount*Math.PI*2,vx=Math.cos(a),vz=Math.sin(a),nudge=.12;if(!obstacleAt(boss.position.x+vx*nudge,boss.position.z+vz*nudge)){bestAngle=a;scoreFound=true;break}}}
  let bridgeMoving=false;
- if(scoreFound){const vx=Math.cos(bestAngle),vz=Math.sin(bestAngle),step=Math.min(6.2*dt,dist);
-  // Recheck the actual short frame step before committing movement.
+ if(scoreFound){const vx=Math.cos(bestAngle),vz=Math.sin(bestAngle),step=moveStep;
   if(!obstacleAt(boss.position.x+vx*step,boss.position.z+vz*step)){
    boss.position.x+=vx*step;boss.position.z+=vz*step;bridgeMoving=step>0
   }}
