@@ -57,7 +57,7 @@ function ensureGridAround(p){
  // Cache collision-sampled links for newly added cells.
  for(const n of newCells){if(cellBlocked(n))continue;for(const [dx,dz] of dirs){const q=navMap.get((n.x+dx*cell)+','+(n.z+dz*cell));if(!q||cellBlocked(q))continue;if(segmentClear(n.x,n.z,q.x,q.z))n.links.push(q)}}
 }
-let fireOrbit=[];let attackCycleIndex=0;const attackClipKeys=['attack','attack_aoe','attack_aoe2'];
+let fireOrbit=[];let bossRayHeading=0,rayVisual=null,rayVisualGeometry=null,rayVisualPositions=null,rayVisualColors=null,rayDirs=[],rayScores=new Uint8Array(360),rayLengths=new Float32Array(360),raycaster=new THREE.Raycaster();let attackCycleIndex=0;const attackClipKeys=['attack','attack_aoe','attack_aoe2'];
 const loader=new GLTFLoader();loader.load('./succubus_boss_for_model_engine.glb',g=>{
  boss=new THREE.Group();const model=g.scene;model.scale.setScalar(1.5);model.rotation.y=Math.PI;boss.add(model);const spawnPoint=findClearSpawn(player.position,25);updateChunks(spawnPoint);boss.position.copy(findClearSpawn(player.position,25));boss.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true}});scene.add(boss);
  mixer=new AnimationMixer(model);mixer.addEventListener('finished',e=>{if(e.action===currentAction&&currentState==='attack'){currentAction=null;currentState='idle'}});clips=g.animations;
@@ -87,40 +87,39 @@ addEventListener('click',e=>{if(e.target.tagName==='BUTTON'||!alive||gameOver||p
 function killBoss(){alive=false;deadAt=performance.now()/1000;play('die');burst(boss.position.clone().add(new THREE.Vector3(0,1,0)),0xff4b98,100);document.getElementById('message').textContent='NEZUKO DEFEATED';}
 document.getElementById('restart').onclick=()=>location.reload();
 let last=performance.now();function loop(now){requestAnimationFrame(loop);const dt=Math.min((now-last)/1000,.05);last=now;if(mixer)mixer.update(dt);for(const ally of survivors){ally.userData.attackAnim=Math.max(0,(ally.userData.attackAnim||0)-dt);const bd=boss?ally.position.distanceTo(boss.position):999;ally.userData.attackCooldown-=dt;if(boss&&alive&&bd<19){const v=boss.position.clone().sub(ally.position);v.y=0;const d=v.length();const side=new THREE.Vector3(-v.z,0,v.x).normalize().multiplyScalar(Math.sin(now/700+survivors.indexOf(ally))*4);if(d>3.5){navMove(ally,boss.position,2.5,dt);ally.rotation.y=Math.atan2(v.x,v.z)}else{ally.position.add(side.multiplyScalar(dt));if(ally.userData.attackCooldown<=0){ally.userData.attackCooldown=1;ally.userData.attackAnim=.8;bossHP=Math.max(0,bossHP-12);burst(boss.position.clone().add(new THREE.Vector3(0,1,0)),0x8effc1,12);if(bossHP<=0)killBoss()}}}else{if(!ally.userData.roamPoint||now/1000>ally.userData.roamUntil){ally.userData.roamUntil=now/1000+3;ally.userData.roamPoint=ally.position.clone().add(new THREE.Vector3((Math.random()-.5)*12,0,(Math.random()-.5)*12))}const v=ally.userData.roamPoint.clone().sub(ally.position);v.y=0;if(v.length()>1){navMove(ally,ally.userData.roamPoint,1.4,dt);ally.rotation.y=Math.atan2(v.x,v.z)}}}if(boss)for(const f of fireOrbit){f.angle+=dt*f.speed;f.mesh.position.set(Math.cos(f.angle)*f.radius,f.height+Math.sin(f.angle*2)*.25,Math.sin(f.angle)*f.radius);}if(attackTimer>0){attackTimer-=dt;if(attackTimer<=0&&currentState==='attack'){currentAction=null;currentState='idle';document.getElementById('message').textContent='FIGHT!'}}if(playerRespawnAt&&now/1000>=playerRespawnAt){playerRespawnAt=0;document.getElementById('message').textContent='FIGHT!'}invuln=Math.max(0,invuln-dt);const moveX=Number(!!(keys.d||keys.arrowright))-Number(!!(keys.a||keys.arrowleft)),moveZ=Number(!!(keys.s||keys.arrowdown))-Number(!!(keys.w||keys.arrowup));const forwardX=-Math.sin(yaw),forwardZ=-Math.cos(yaw),rightX=Math.cos(yaw),rightZ=-Math.sin(yaw);const playerMoveX=forwardX*(-moveZ)+rightX*moveX,playerMoveZ=forwardZ*(-moveZ)+rightZ*moveX;if(Math.abs(playerMoveX)+Math.abs(playerMoveZ)>.001){player.rotation.y=Math.atan2(playerMoveX,playerMoveZ)}player.position.x+=playerMoveX*dt*5;player.position.z+=playerMoveZ*dt*5;animateHumanoid(playerRig,Math.abs(moveX)+Math.abs(moveZ)>0,playerRig.attack||0,dt,now/1000);playerRig.attack=Math.max(0,(playerRig.attack||0)-dt*3);for(const ally of survivors)animateHumanoid(ally.userData.rig,!!ally.userData.roamPoint&&ally.position.distanceTo(ally.userData.roamPoint)>1,ally.userData.attackAnim||0,dt,now/1000);updateChunks(player.position);ensureGridAround(player.position);
- if(boss&&alive&&!gameOver){clawRakeClock+=dt;if(clawRakeClock>=14){clawRakeClock=0;for(const victim of [player,...survivors]){clawRake(victim);}}}if(boss){if(attackAt===0){attackAt=now/1000+0.8;}contactDamageClock+=dt;const contactDistance=boss.position.distanceTo(player.position);if(contactDistance<12&&contactDamageClock>=3){contactDamageClock=0;damagePlayer(45);burst(player.position.clone().add(new THREE.Vector3(0,1,0)),0xff438d,45);document.getElementById('message').textContent='NEZUKO HIT YOU! -45 HP';setTimeout(()=>{if(!gameOver)document.getElementById('message').textContent='FIGHT!'},700)}fireTrailClock+=dt;if(fireTrailClock>.12){fireTrailClock=0;leaveFire(boss.position)}// Score-steered AI: collision sampling only; raycasting removed.
+ if(boss&&alive&&!gameOver){clawRakeClock+=dt;if(clawRakeClock>=14){clawRakeClock=0;for(const victim of [player,...survivors]){clawRake(victim);}}}if(boss){if(attackAt===0){attackAt=now/1000+0.8;}contactDamageClock+=dt;const contactDistance=boss.position.distanceTo(player.position);if(contactDistance<12&&contactDamageClock>=3){contactDamageClock=0;damagePlayer(45);burst(player.position.clone().add(new THREE.Vector3(0,1,0)),0xff438d,45);document.getElementById('message').textContent='NEZUKO HIT YOU! -45 HP';setTimeout(()=>{if(!gameOver)document.getElementById('message').textContent='FIGHT!'},700)}fireTrailClock+=dt;if(fireTrailClock>.12){fireTrailClock=0;leaveFire(boss.position)}// 360-ray steering: 1 = unobstructed, 0 = surface hit. Ray gizmos are the only nav visuals.
 const targets=[player,...survivors];
-if(!bossTarget||now/1000>=bossTargetLockUntil){bossTarget=targets[Math.floor(Math.random()*targets.length)];bossTargetLockUntil=now/1000+11;console.log('Nezuko bridge target:',bossTarget===player?'PLAYER':'SURVIVOR')}
+if(!bossTarget||now/1000>=bossTargetLockUntil){bossTarget=targets[Math.floor(Math.random()*targets.length)];bossTargetLockUntil=now/1000+11;console.log('Nezuko ray target:',bossTarget===player?'PLAYER':'SURVIVOR')}
 const targetPos=bossTarget.position,dx=targetPos.x-boss.position.x,dz=targetPos.z-boss.position.z,dist=Math.hypot(dx,dz);face(boss,targetPos);
 if(dist>3.1){
- // BINARY DIRECTION SCORING: 1 = safe/open, 0 = blocked. No rays or grid steering.
- const desired=Math.atan2(targetPos.z-boss.position.z,targetPos.x-boss.position.x);
- const obstacleAt=(x,z)=>{for(const chunk of city.children)for(const b of chunk.children){const box=b.userData.navBox;if(box&&x+.7>box.min.x&&x-.7<box.max.x&&z+.7>box.min.z&&z-.7<box.max.z)return true}return false};
- let bestAngle=desired,bestScore=-Infinity,scoreFound=false;
- const headingCount=64,moveStep=Math.min(6.2*dt,Math.max(.08,dist-2.8));
- for(let j=0;j<headingCount;j++){
-  const angle=j/headingCount*Math.PI*2,vx=Math.cos(angle),vz=Math.sin(angle);
-  // A direction is OPEN only if the immediate step is clear; otherwise its binary score is 0.
-  const immediateOpen=!obstacleAt(boss.position.x+vx*moveStep,boss.position.z+vz*moveStep);
-  const safetyScore=immediateOpen?1:0;
-  if(!safetyScore)continue;
-  // Look ahead in small increments; longer clear corridors earn a bonus.
-  let openDistance=0;
-  for(let d=.35;d<=5.25;d+=.35){
-   if(obstacleAt(boss.position.x+vx*d,boss.position.z+vz*d))break;
-   openDistance=d;
-  }
-  const alignment=(Math.cos(angle-desired)+1)*.5;
-  const score=safetyScore* (alignment*3.0 + openDistance*.8 + (openDistance>=5.2?1.5:0));
-  if(score>bestScore){bestScore=score;bestAngle=angle;scoreFound=true}
+ const rayCount=360,rayRange=8,rayOrigin=new THREE.Vector3(boss.position.x,boss.position.y+1.05,boss.position.z);raycaster.far=rayRange;
+ if(!rayVisual){rayVisualPositions=new Float32Array(rayCount*6);rayVisualColors=new Float32Array(rayCount*6);rayVisualGeometry=new THREE.BufferGeometry();rayVisualGeometry.setAttribute('position',new THREE.BufferAttribute(rayVisualPositions,3));rayVisualGeometry.setAttribute('color',new THREE.BufferAttribute(rayVisualColors,3));rayVisual=new THREE.LineSegments(rayVisualGeometry,new THREE.LineBasicMaterial({vertexColors:true,transparent:true,opacity:.72}));rayVisual.frustumCulled=false;scene.add(rayVisual);for(let i=0;i<rayCount;i++){const a=i/rayCount*Math.PI*2;rayDirs.push(new THREE.Vector3(Math.cos(a),0,Math.sin(a)));rayLengths[i]=rayRange}}
+ let bestAngle=0,bestScore=-Infinity,found=false;const desired=Math.atan2(dz,dx);
+ const obstacles=city.children;
+ for(let i=0;i<rayCount;i++){
+  raycaster.set(rayOrigin,rayDirs[i]);const hits=raycaster.intersectObjects(obstacles,true);
+  const hit=hits.find(h=>h.object.userData.navBox||h.object.isMesh);
+  const clear=!hit;rayScores[i]=clear?1:0;rayLengths[i]=clear?rayRange:Math.max(.08,hit.distance);
+  const angle=i/rayCount*Math.PI*2,alignment=(Math.cos(angle-desired)+1)*.5;
+  // Binary safety is decisive; clear rays toward target win, with a mild clearance tie-break.
+  const score=rayScores[i]?(alignment*4+rayLengths[i]*.025):-1;
+  if(score>bestScore){bestScore=score;bestAngle=angle;found=!!rayScores[i]}
+  const k=i*6,end=rayOrigin.clone().addScaledVector(rayDirs[i],rayLengths[i]);
+  rayVisualPositions[k]=rayOrigin.x;rayVisualPositions[k+1]=rayOrigin.y;rayVisualPositions[k+2]=rayOrigin.z;
+  rayVisualPositions[k+3]=end.x;rayVisualPositions[k+4]=end.y;rayVisualPositions[k+5]=end.z;
+  const color=clear?[.18,.95,.42]:[1,.12,.2];rayVisualColors.set(color,k);rayVisualColors.set(color,k+3);
  }
- // Escape fallback: if boxed in, try tiny collision-safe moves in all 64 headings.
- if(!scoreFound){for(let j=0;j<headingCount;j++){const a=j/headingCount*Math.PI*2,vx=Math.cos(a),vz=Math.sin(a),nudge=.12;if(!obstacleAt(boss.position.x+vx*nudge,boss.position.z+vz*nudge)){bestAngle=a;scoreFound=true;break}}}
- let bridgeMoving=false;
- if(scoreFound){const vx=Math.cos(bestAngle),vz=Math.sin(bestAngle),step=moveStep;
-  if(!obstacleAt(boss.position.x+vx*step,boss.position.z+vz*step)){
-   boss.position.x+=vx*step;boss.position.z+=vz*step;bridgeMoving=step>0
-  }}
- if(bridgeMoving){boss.rotation.y=Math.atan2(Math.cos(bestAngle),Math.sin(bestAngle));if(currentState!=='walk'&&clips.walk)play('walk');attackTimer=0}
+ rayVisualGeometry.attributes.position.needsUpdate=true;rayVisualGeometry.attributes.color.needsUpdate=true;rayVisualGeometry.computeBoundingSphere();
+ // Smoothly turn toward the selected clear ray instead of snapping.
+ if(found){
+  let delta=Math.atan2(Math.sin(bestAngle-bossRayHeading),Math.cos(bestAngle-bossRayHeading));
+  bossRayHeading+=Math.max(-dt*4.2,Math.min(dt*4.2,delta));
+  const step=Math.min(6.2*dt,Math.max(.08,dist-2.8)),vx=Math.cos(bossRayHeading),vz=Math.sin(bossRayHeading);
+  // Short forward confirmation ray prevents a frame-step collision.
+  raycaster.far=step+.65;raycaster.set(rayOrigin,new THREE.Vector3(vx,0,vz));
+  const frontHit=raycaster.intersectObjects(obstacles,true).length>0;
+  if(!frontHit){boss.position.x+=vx*step;boss.position.z+=vz*step;if(currentState!=='walk'&&clips.walk)play('walk');attackTimer=0}
+ }
 }else if(now/1000>=attackAt){attackAt=now/1000+BOSS_ATTACK_INTERVAL;fireball(bossTarget)}
 if(dist>8&&currentState==='attack'){if(currentAction){currentAction.stop();currentAction=null}currentState='idle';attackTimer=0}
 }if(boss&&!alive&&!respawnPending&&now/1000-deadAt>=45){respawnPending=true;alive=true;boss.visible=false;const spawnPoint=findClearSpawn(player.position,25);updateChunks(spawnPoint);boss.position.copy(findClearSpawn(player.position,25));bossHP=15000;document.getElementById('message').textContent='NEZUKO RETURNS';burst(boss.position.clone().add(new THREE.Vector3(0,1,0)),0xff6cae,80);boss.visible=true;play('respawn');setTimeout(()=>{if(alive)play('idle');respawnPending=false},2200)}
