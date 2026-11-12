@@ -57,7 +57,7 @@ function ensureGridAround(p){
  // Cache collision-sampled links for newly added cells.
  for(const n of newCells){if(cellBlocked(n))continue;for(const [dx,dz] of dirs){const q=navMap.get((n.x+dx*cell)+','+(n.z+dz*cell));if(!q||cellBlocked(q))continue;if(segmentClear(n.x,n.z,q.x,q.z))n.links.push(q)}}
 }
-let fireOrbit=[];let bossRayHeading=0,rayVisual=null,rayVisualGeometry=null,rayVisualPositions=null,rayVisualColors=null,rayDirs=[],rayScores=new Uint8Array(360),rayLengths=new Float32Array(360),raycaster=new THREE.Raycaster();let attackCycleIndex=0;const attackClipKeys=['attack','attack_aoe','attack_aoe2'];
+const groundScoreMap=new Map();let fireOrbit=[];let bossRayHeading=0,rayVisual=null,rayVisualGeometry=null,rayVisualPositions=null,rayVisualColors=null,rayDirs=[],rayScores=new Uint8Array(360),rayLengths=new Float32Array(360),raycaster=new THREE.Raycaster();let attackCycleIndex=0;const attackClipKeys=['attack','attack_aoe','attack_aoe2'];
 const loader=new GLTFLoader();loader.load('./succubus_boss_for_model_engine.glb',g=>{
  boss=new THREE.Group();const model=g.scene;model.scale.setScalar(1.5);model.rotation.y=Math.PI;boss.add(model);const spawnPoint=findClearSpawn(player.position,25);updateChunks(spawnPoint);boss.position.copy(findClearSpawn(player.position,25));boss.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true}});scene.add(boss);
  mixer=new AnimationMixer(model);mixer.addEventListener('finished',e=>{if(e.action===currentAction&&currentState==='attack'){currentAction=null;currentState='idle'}});clips=g.animations;
@@ -90,31 +90,20 @@ let last=performance.now();function loop(now){requestAnimationFrame(loop);const 
  if(boss&&alive&&!gameOver){clawRakeClock+=dt;if(clawRakeClock>=14){clawRakeClock=0;for(const victim of [player,...survivors]){clawRake(victim);}}}if(boss){if(attackAt===0){attackAt=now/1000+0.8;}contactDamageClock+=dt;const contactDistance=boss.position.distanceTo(player.position);if(contactDistance<12&&contactDamageClock>=3){contactDamageClock=0;damagePlayer(45);burst(player.position.clone().add(new THREE.Vector3(0,1,0)),0xff438d,45);document.getElementById('message').textContent='NEZUKO HIT YOU! -45 HP';setTimeout(()=>{if(!gameOver)document.getElementById('message').textContent='FIGHT!'},700)}fireTrailClock+=dt;if(fireTrailClock>.12){fireTrailClock=0;leaveFire(boss.position)}// 360-ray steering: 1 = unobstructed, 0 = surface hit. Ray gizmos are the only nav visuals.
 const targets=[player,...survivors];
 if(!bossTarget||now/1000>=bossTargetLockUntil){bossTarget=targets[Math.floor(Math.random()*targets.length)];bossTargetLockUntil=now/1000+11;console.log('Nezuko ray target:',bossTarget===player?'PLAYER':'SURVIVOR')}
-const targetPos=bossTarget.position,dx=targetPos.x-boss.position.x,dz=targetPos.z-boss.position.z,dist=Math.hypot(dx,dz);face(boss,targetPos);
-if(dist>3.1){
- // Ground score map: 0 = blocked footprint, 1 = open ground. No raycasts.
- const scoreStep=2,scoreRadius=12,scoreMap=new Map(),buildings=[];
- for(const group of city.children)for(const obj of group.children)if(obj.userData.navBox)buildings.push(obj.userData.navBox);
- const cellScore=(gx,gz)=>{const key=gx+','+gz;if(scoreMap.has(key))return scoreMap.get(key);const x=gx*scoreStep,z=gz*scoreStep;let score=1;for(const b of buildings){if(b.max.y<.1)continue;if(x+1.05>b.min.x&&x-1.05<b.max.x&&z+1.05>b.min.z&&z-1.05<b.max.z){score=0;break}}scoreMap.set(key,score);return score};
- const baseX=Math.round(boss.position.x/scoreStep),baseZ=Math.round(boss.position.z/scoreStep);
- let bestAngle=bossRayHeading,bestScore=-Infinity,found=false;
- const desired=Math.atan2(dz,dx);
- for(let a=0;a<360;a++){
-  const angle=a*Math.PI/180,vx=Math.cos(angle),vz=Math.sin(angle);let open=0,blocked=0,firstBlocked=99;
-  for(let n=1;n<=6;n++){const gx=Math.round((boss.position.x+vx*n*scoreStep)/scoreStep),gz=Math.round((boss.position.z+vz*n*scoreStep)/scoreStep);const s=cellScore(gx,gz);if(s===1)open++;else{blocked++;firstBlocked=Math.min(firstBlocked,n)}}
-  const align=(Math.cos(angle-desired)+1)*.5,turn=(Math.cos(angle-bossRayHeading)+1)*.5;
-  const score=open*2.2-blocked*5+align*3+turn*.8+firstBlocked*.12;
-  if(blocked===0||firstBlocked>1){if(score>bestScore){bestScore=score;bestAngle=angle;found=true}}
- }
- // Ground score tiles are the sole navigation data; steering follows the best open corridor.
- if(found){
-  let delta=Math.atan2(Math.sin(bestAngle-bossRayHeading),Math.cos(bestAngle-bossRayHeading));
-  bossRayHeading+=Math.max(-dt*3.8,Math.min(dt*3.8,delta));
-  const step=Math.min(5.2*dt,Math.max(.08,dist-2.8)),vx=Math.cos(bossRayHeading),vz=Math.sin(bossRayHeading);
-  const nx=boss.position.x+vx*step,nz=boss.position.z+vz*step;
-  if(cellScore(Math.round(nx/scoreStep),Math.round(nz/scoreStep))===1){boss.position.x=nx;boss.position.z=nz;if(currentState!=='walk'&&clips.walk)play('walk');attackTimer=0}
- }
-}else if(now/1000>=attackAt){attackAt=now/1000+BOSS_ATTACK_INTERVAL;fireball(bossTarget)}
+const targetPos=bossTarget.position,dx=targetPos.x-boss.position.x,dz=targetPos.z-boss.position.z,dist=Math.hypot(dx,dz);// Persistent 0/1 ground-score map drives every movement decision (no raycasts).
+const scoreStep=2,scoreMap=groundScoreMap,buildings=[];
+for(const group of city.children)for(const obj of group.children)if(obj.userData.navBox)buildings.push(obj.userData.navBox);
+const cellScore=(gx,gz)=>{const key=gx+','+gz;if(scoreMap.has(key))return scoreMap.get(key);const x=gx*scoreStep,z=gz*scoreStep;let s=1;for(const b of buildings){if(b.max.y<.1)continue;if(x+1.05>b.min.x&&x-1.05<b.max.x&&z+1.05>b.min.z&&z-1.05<b.max.z){s=0;break}}scoreMap.set(key,s);return s};
+const baseX=Math.round(boss.position.x/scoreStep),baseZ=Math.round(boss.position.z/scoreStep),desired=Math.atan2(dz,dx);
+let bestAngle=bossRayHeading,bestScore=-Infinity,found=false;
+for(let a=0;a<360;a++){const angle=a*Math.PI/180,vx=Math.cos(angle),vz=Math.sin(angle);let open=0,blocked=0,firstBlocked=99;
+for(let n=1;n<=7;n++){const gx=Math.round((boss.position.x+vx*n*scoreStep)/scoreStep),gz=Math.round((boss.position.z+vz*n*scoreStep)/scoreStep),s=cellScore(gx,gz);if(s===1)open++;else{blocked++;firstBlocked=Math.min(firstBlocked,n)}}
+const targetBias=(Math.cos(angle-desired)+1)*.5,turnBias=(Math.cos(angle-bossRayHeading)+1)*.5;
+const score=open*2.5-blocked*7+targetBias*2.2+turnBias*1.1+firstBlocked*.1;
+if(firstBlocked>1&&score>bestScore){bestScore=score;bestAngle=angle;found=true}}
+if(dist>3.1&&found){const delta=Math.atan2(Math.sin(bestAngle-bossRayHeading),Math.cos(bestAngle-bossRayHeading));bossRayHeading+=Math.max(-dt*3.2,Math.min(dt*3.2,delta));const vx=Math.cos(bossRayHeading),vz=Math.sin(bossRayHeading),step=Math.min(5.2*dt,Math.max(.08,dist-2.8)),nx=boss.position.x+vx*step,nz=boss.position.z+vz*step;
+if(cellScore(Math.round(nx/scoreStep),Math.round(nz/scoreStep))===1){boss.position.x=nx;boss.position.z=nz;boss.rotation.y=Math.atan2(vx,vz);if(currentState!=='walk'&&clips.walk)play('walk');attackTimer=0}}
+else if(dist<=3.1){boss.rotation.y=Math.atan2(dx,dz);if(now/1000>=attackAt){attackAt=now/1000+BOSS_ATTACK_INTERVAL;fireball(bossTarget)}}
 if(dist>8&&currentState==='attack'){if(currentAction){currentAction.stop();currentAction=null}currentState='idle';attackTimer=0}
 }if(boss&&!alive&&!respawnPending&&now/1000-deadAt>=45){respawnPending=true;alive=true;boss.visible=false;const spawnPoint=findClearSpawn(player.position,25);updateChunks(spawnPoint);boss.position.copy(findClearSpawn(player.position,25));bossHP=15000;document.getElementById('message').textContent='NEZUKO RETURNS';burst(boss.position.clone().add(new THREE.Vector3(0,1,0)),0xff6cae,80);boss.visible=true;play('respawn');setTimeout(()=>{if(alive)play('idle');respawnPending=false},2200)}
  for(let i=effects.length-1;i>=0;i--)if(effects[i](dt))effects.splice(i,1);
