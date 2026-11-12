@@ -152,23 +152,28 @@ const targets=[player,...survivors];
 if(!bossTarget||now/1000>=bossTargetLockUntil){bossTarget=targets[Math.floor(Math.random()*targets.length)];bossTargetLockUntil=now/1000+11;console.log('Nezuko bridge target:',bossTarget===player?'PLAYER':'SURVIVOR')}
 const targetPos=bossTarget.position,dx=targetPos.x-boss.position.x,dz=targetPos.z-boss.position.z,dist=Math.hypot(dx,dz);face(boss,targetPos);
 if(dist>3.1){
- // Continuous ground/object sensing—no nav cells or grid graph.
- const from=new THREE.Vector3(boss.position.x,.85,boss.position.z),desired=Math.atan2(targetPos.z-boss.position.z,targetPos.x-boss.position.x);
- let bestAngle=desired,bestScore=Infinity,clearFound=false;
- // Probe 24 candidate headings around her, using geometry raycasts to reject walls/buildings.
- for(let j=0;j<24;j++){
-  const angle=j/24*Math.PI*2,dir=new THREE.Vector3(Math.cos(angle),0,Math.sin(angle));
-  ray.set(from,dir);ray.far=3.4;
-  const hits=ray.intersectObjects(city.children,true),clear=!hits.length;
-  if(!clear)continue;
-  const delta=Math.atan2(Math.sin(angle-desired),Math.cos(angle-desired)),score=Math.abs(delta);
-  if(score<bestScore){bestScore=score;bestAngle=angle;clearFound=true}
+ // SCORE-BASED DIRECTIONAL STEERING: no raycasts, no grid/path bridge.
+ const desired=Math.atan2(targetPos.z-boss.position.z,targetPos.x-boss.position.x);
+ const obstacleAt=(x,z)=>{for(const chunk of city.children)for(const b of chunk.children){const box=b.userData.navBox;if(box&&x+.62>box.min.x&&x-.62<box.max.x&&z+.62>box.min.z&&z-.62<box.max.z)return true}return false};
+ let bestAngle=desired,bestScore=-1,scoreFound=false;
+ // Every heading gets a binary safety score: 1 = collision-free, 0 = blocked.
+ for(let j=0;j<32;j++){
+  const angle=j/32*Math.PI*2,vx=Math.cos(angle),vz=Math.sin(angle),probe=3.5;
+  let safety=1;
+  // Check several points along the candidate movement segment using collision boxes (not rays).
+  for(let k=1;k<=5;k++){const t=probe*k/5;if(obstacleAt(boss.position.x+vx*t,boss.position.z+vz*t)){safety=0;break}}
+  if(safety===0)continue;
+  const alignment=(Math.cos(angle-desired)+1)*.5;
+  const score=safety*(.35+.65*alignment);
+  if(score>bestScore){bestScore=score;bestAngle=angle;scoreFound=true}
  }
- // If directly aimed route is open, it naturally wins; otherwise pick the clearest heading closest to target.
  let bridgeMoving=false;
- if(clearFound){const vx=Math.cos(bestAngle),vz=Math.sin(bestAngle),step=Math.min(6.2*dt,dist);
-  boss.position.x+=vx*step;boss.position.z+=vz*step;bridgeMoving=step>0}
- if(bridgeMoving){if(currentState!=='walk'&&clips.walk)play('walk');attackTimer=0}
+ if(scoreFound){const vx=Math.cos(bestAngle),vz=Math.sin(bestAngle),step=Math.min(6.2*dt,dist);
+  // Recheck the actual short frame step before committing movement.
+  if(!obstacleAt(boss.position.x+vx*step,boss.position.z+vz*step)){
+   boss.position.x+=vx*step;boss.position.z+=vz*step;bridgeMoving=step>0
+  }}
+ if(bridgeMoving){boss.rotation.y=Math.atan2(Math.cos(bestAngle),Math.sin(bestAngle));if(currentState!=='walk'&&clips.walk)play('walk');attackTimer=0}
 }else if(now/1000>=attackAt){attackAt=now/1000+BOSS_ATTACK_INTERVAL;fireball(bossTarget)}
 if(dist>8&&currentState==='attack'){if(currentAction){currentAction.stop();currentAction=null}currentState='idle';attackTimer=0}
 }if(boss&&!alive&&!respawnPending&&now/1000-deadAt>=45){respawnPending=true;alive=true;boss.visible=false;const spawnPoint=findClearSpawn(player.position,25);updateChunks(spawnPoint);boss.position.copy(findClearSpawn(player.position,25));bossHP=15000;document.getElementById('message').textContent='NEZUKO RETURNS';burst(boss.position.clone().add(new THREE.Vector3(0,1,0)),0xff6cae,80);boss.visible=true;play('respawn');setTimeout(()=>{if(alive)play('idle');respawnPending=false},2200)}
