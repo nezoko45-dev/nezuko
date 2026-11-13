@@ -46,13 +46,17 @@ function nextCell(start,goal){
 }
 function segmentClear(x1,z1,x2,z2){const d=Math.hypot(x2-x1,z2-z1),steps=Math.max(2,Math.ceil(d/.7));for(let i=1;i<steps;i++){const t=i/steps;if(cellBlocked({x:x1+(x2-x1)*t,z:z1+(z2-z1)*t}))return false}return true}
 function curvedSteer(actor,target,speed,dt){
- const dx=target.x-actor.position.x,dz=target.z-actor.position.z,dist=Math.hypot(dx,dz);if(dist<.01)return;
- const desired=Math.atan2(dz,dx),old=actor.userData.curvedHeading??desired;
- const obstacles=[];for(const group of city.children)for(const obj of group.children)if(obj.userData.navBox&&obj.userData.navBox.max.y>.1)obstacles.push(obj.userData.navBox);
- const clear=(angle)=>{const vx=Math.cos(angle),vz=Math.sin(angle),look=Math.min(3.2,Math.max(.8,dist-1));for(let d=.35;d<=look;d+=.3){const x=actor.position.x+vx*d,z=actor.position.z+vz*d;for(const box of obstacles)if(x+0.65>box.min.x&&x-0.65<box.max.x&&z+0.65>box.min.z&&z-0.65<box.max.z)return false}return true};
- let best=old,bestScore=-Infinity;for(let i=-36;i<=36;i+=3){const angle=desired+i*Math.PI/180;if(!clear(angle))continue;const score=Math.cos(angle-desired)*4+Math.cos(angle-old)*2.8-Math.abs(i)*.012;if(score>bestScore){bestScore=score;best=angle}}
- const delta=Math.atan2(Math.sin(best-old),Math.cos(best-old));const heading=old+Math.max(-dt*2.5,Math.min(dt*2.5,delta));actor.userData.curvedHeading=heading;
- const step=Math.min(speed*dt,Math.max(.0,dist-.8));actor.position.x+=Math.cos(heading)*step;actor.position.z+=Math.sin(heading)*step;
+ const dx=target.x-actor.position.x,dz=target.z-actor.position.z,dist=Math.hypot(dx,dz);
+ if(dist<.01)return;
+ const ud=actor.userData,desiredX=dx/dist,desiredZ=dz/dist;
+ let v=ud.steeringVector;
+ if(!v||!Number.isFinite(v.x)||!Number.isFinite(v.z)||Math.hypot(v.x,v.z)<.001)v={x:desiredX,z:desiredZ};
+ // One persistent guidance vector: continuously bend the existing heading toward the target.
+ const blend=1-Math.exp(-Math.max(0,dt)*2.8);
+ v.x+=(desiredX-v.x)*blend;v.z+=(desiredZ-v.z)*blend;
+ const length=Math.hypot(v.x,v.z)||1;v.x/=length;v.z/=length;ud.steeringVector=v;
+ const step=Math.min(speed*dt,Math.max(0,dist-.8));
+ actor.position.x+=v.x*step;actor.position.z+=v.z*step;
 }
 function navMove(actor,target,speed,dt){curvedSteer(actor,target,speed,dt);return true}
 const navMap=new Map(nav.map(n=>[n.x+','+n.z,n])),navKeys=new Set(navMap.keys());let gridCenterX=NaN,gridCenterZ=NaN;
@@ -66,7 +70,7 @@ function ensureGridAround(p){
  // Cache collision-sampled links for newly added cells.
  for(const n of newCells){if(cellBlocked(n))continue;for(const [dx,dz] of dirs){const q=navMap.get((n.x+dx*cell)+','+(n.z+dz*cell));if(!q||cellBlocked(q))continue;if(segmentClear(n.x,n.z,q.x,q.z))n.links.push(q)}}
 }
-const groundScoreMap=new Map();let fireOrbit=[];let bossRayHeading=0,rayVisual=null,rayVisualGeometry=null,rayVisualPositions=null,rayVisualColors=null,rayDirs=[],rayScores=new Uint8Array(360),rayLengths=new Float32Array(360),raycaster=new THREE.Raycaster();let attackCycleIndex=0;const attackClipKeys=['attack','attack_aoe','attack_aoe2'];
+let fireOrbit=[];let bossRayHeading=0,rayVisual=null,rayVisualGeometry=null,rayVisualPositions=null,rayVisualColors=null,rayDirs=[],rayScores=new Uint8Array(360),rayLengths=new Float32Array(360),raycaster=new THREE.Raycaster();let attackCycleIndex=0;const attackClipKeys=['attack','attack_aoe','attack_aoe2'];
 const loader=new GLTFLoader();loader.load('./succubus_boss_for_model_engine.glb',g=>{
  boss=new THREE.Group();const model=g.scene;model.scale.setScalar(1.5);model.rotation.y=Math.PI;boss.add(model);const spawnPoint=findClearSpawn(player.position,25);updateChunks(spawnPoint);boss.position.copy(findClearSpawn(player.position,25));boss.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true}});scene.add(boss);
  mixer=new AnimationMixer(model);mixer.addEventListener('finished',e=>{if(e.action===currentAction&&currentState==='attack'){currentAction=null;currentState='idle'}});clips=g.animations;
