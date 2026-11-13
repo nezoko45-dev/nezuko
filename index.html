@@ -99,7 +99,7 @@ let bestAngle=bossRayHeading,bestScore=-Infinity,found=false;
 for(let a=0;a<360;a+=2){const angle=a*Math.PI/180,vx=Math.cos(angle),vz=Math.sin(angle);let clear=0,blocked=0,reach=0;
 for(let n of [.35,.7,1.2,1.8,2.6,3.6,5,7,9]){const gx=Math.round((boss.position.x+vx*n)/scoreStep),gz=Math.round((boss.position.z+vz*n)/scoreStep);if(cellScore(gx,gz)===1){clear++;reach=n}else blocked++}
 if(cellScore(Math.round((boss.position.x+vx*.35)/scoreStep),Math.round((boss.position.z+vz*.35)/scoreStep))!==1)continue;
-const targetGain=Math.max(-2,Math.min(2,dist-Math.hypot(targetPos.x-(boss.position.x+vx*reach),targetPos.z-(boss.position.z+vz*reach)));
+const targetGain=Math.max(-2,Math.min(2,dist-Math.hypot(targetPos.x-(boss.position.x+vx*reach),targetPos.z-(boss.position.z+vz*reach))));
 const persistence=Math.cos(angle-bossRayHeading);
 const score=clear*3.2-blocked*6+targetGain*5+(Math.cos(angle-desired)+1)*3+persistence*2.4;
 if(score>bestScore){bestScore=score;bestAngle=angle;found=true}}
