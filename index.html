@@ -74,13 +74,6 @@ function curvedSteer(actor,target,speed,dt){
  actor.position.x+=v.x*step;actor.position.z+=v.z*step;
 }
 function navMove(actor,target,speed,dt){curvedSteer(actor,target,speed,dt);return true}
-const steeringGizmos=new Map();let showSteeringVector=false;
-const vectorToggle=document.getElementById('vectorToggle');
-vectorToggle.addEventListener('click',()=>{
- showSteeringVector=!showSteeringVector;
- vectorToggle.textContent='Vector: '+(showSteeringVector?'ON':'OFF');
- for(const arrow of steeringGizmos.values())arrow.visible=showSteeringVector;
-});
 const steeringGizmos=new Map(),steeringTrails=new Map();let showSteeringVector=false;
 const vectorToggle=document.getElementById('vectorToggle');
 vectorToggle.addEventListener('click',()=>{
