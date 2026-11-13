@@ -49,7 +49,7 @@ function curvedSteer(actor,target,speed,dt){
  const dx=target.x-actor.position.x,dz=target.z-actor.position.z,dist=Math.hypot(dx,dz);if(dist<.01)return;
  const desired=Math.atan2(dz,dx),old=actor.userData.curvedHeading??desired;
  const obstacles=[];for(const group of city.children)for(const obj of group.children)if(obj.userData.navBox&&obj.userData.navBox.max.y>.1)obstacles.push(obj.userData.navBox);
- const clear=(angle)=>{const vx=Math.cos(angle),vz=Math.sin(angle),look=Math.min(3.2,Math.max(.8,dist-1));for(let d=.35;d<=look;d+=.3){const x=actor.position.x+vx*d,z=actor.position.z+vz*d;for(const box of obstacles)if(x>.minX){}for(const box of obstacles)if(x+0.65>box.min.x&&x-0.65<box.max.x&&z+0.65>box.min.z&&z-0.65<box.max.z)return false}return true};
+ const clear=(angle)=>{const vx=Math.cos(angle),vz=Math.sin(angle),look=Math.min(3.2,Math.max(.8,dist-1));for(let d=.35;d<=look;d+=.3){const x=actor.position.x+vx*d,z=actor.position.z+vz*d;for(const box of obstacles)if(x+0.65>box.min.x&&x-0.65<box.max.x&&z+0.65>box.min.z&&z-0.65<box.max.z)return false}return true};
  let best=old,bestScore=-Infinity;for(let i=-36;i<=36;i+=3){const angle=desired+i*Math.PI/180;if(!clear(angle))continue;const score=Math.cos(angle-desired)*4+Math.cos(angle-old)*2.8-Math.abs(i)*.012;if(score>bestScore){bestScore=score;best=angle}}
  const delta=Math.atan2(Math.sin(best-old),Math.cos(best-old));const heading=old+Math.max(-dt*2.5,Math.min(dt*2.5,delta));actor.userData.curvedHeading=heading;
  const step=Math.min(speed*dt,Math.max(.0,dist-.8));actor.position.x+=Math.cos(heading)*step;actor.position.z+=Math.sin(heading)*step;
