@@ -74,6 +74,23 @@ function curvedSteer(actor,target,speed,dt){
  actor.position.x+=v.x*step;actor.position.z+=v.z*step;
 }
 function navMove(actor,target,speed,dt){curvedSteer(actor,target,speed,dt);return true}
+const steeringGizmos=new Map();let showSteeringVector=false;
+const vectorToggle=document.getElementById('vectorToggle');
+vectorToggle.addEventListener('click',()=>{
+ showSteeringVector=!showSteeringVector;
+ vectorToggle.textContent='Vector: '+(showSteeringVector?'ON':'OFF');
+ for(const arrow of steeringGizmos.values())arrow.visible=showSteeringVector;
+});
+function updateSteeringGizmo(actor,key,color){
+ let arrow=steeringGizmos.get(key);
+ if(!arrow){arrow=new THREE.ArrowHelper(new THREE.Vector3(0,0,1),new THREE.Vector3(),4,color,.7,.35);arrow.renderOrder=10;scene.add(arrow);steeringGizmos.set(key,arrow)}
+ const v=actor?.userData?.steeringVector;
+ if(!v||!Number.isFinite(v.x)||!Number.isFinite(v.z)){arrow.visible=false;return}
+ arrow.position.set(actor.position.x,.25,actor.position.z);
+ arrow.setDirection(new THREE.Vector3(v.x,0,v.z).normalize());
+ arrow.setLength(4,.7,.35);arrow.visible=showSteeringVector;
+}
+
 const navMap=new Map(nav.map(n=>[n.x+','+n.z,n])),navKeys=new Set(navMap.keys());let gridCenterX=NaN,gridCenterZ=NaN;
 function ensureGridAround(p){
  const cx=Math.round(p.x/cell),cz=Math.round(p.z/cell),radius=12;
@@ -122,6 +139,6 @@ if(dist>8&&currentState==='attack'){if(currentAction){currentAction.stop();curre
 }if(boss&&!alive&&!respawnPending&&now/1000-deadAt>=45){respawnPending=true;alive=true;boss.visible=false;const spawnPoint=findClearSpawn(player.position,25);updateChunks(spawnPoint);boss.position.copy(findClearSpawn(player.position,25));bossHP=15000;document.getElementById('message').textContent='NEZUKO RETURNS';burst(boss.position.clone().add(new THREE.Vector3(0,1,0)),0xff6cae,80);boss.visible=true;play('respawn');setTimeout(()=>{if(alive)play('idle');respawnPending=false},2200)}
  for(let i=effects.length-1;i>=0;i--)if(effects[i](dt))effects.splice(i,1);
  document.getElementById('bossbar').style.width=bossHP/150+'%';document.getElementById('bossnum').textContent=bossHP+' / 15000';document.getElementById('playerbar').style.width=playerHP+'%';document.getElementById('playernum').textContent=playerHP+' / 100';
- camera.position.set(player.position.x,player.position.y+1.65,player.position.z);camera.rotation.order='YXZ';camera.rotation.y=yaw;camera.rotation.x=pitch;renderer.render(scene,camera)}
+ camera.position.set(player.position.x,player.position.y+1.65,player.position.z);camera.rotation.order='YXZ';camera.rotation.y=yaw;camera.rotation.x=pitch;if(boss)updateSteeringGizmo(boss,'boss',0xff45ad);for(let i=0;i<survivors.length;i++)updateSteeringGizmo(survivors[i],'ally'+i,0x66ffcc);renderer.render(scene,camera)}
 requestAnimationFrame(loop);addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
 </script></body></html>
