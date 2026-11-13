@@ -81,14 +81,25 @@ vectorToggle.addEventListener('click',()=>{
  vectorToggle.textContent='Vector: '+(showSteeringVector?'ON':'OFF');
  for(const arrow of steeringGizmos.values())arrow.visible=showSteeringVector;
 });
+const steeringGizmos=new Map(),steeringTrails=new Map();let showSteeringVector=false;
+const vectorToggle=document.getElementById('vectorToggle');
+vectorToggle.addEventListener('click',()=>{
+ showSteeringVector=!showSteeringVector;
+ vectorToggle.textContent='Vector: '+(showSteeringVector?'ON':'OFF');
+ for(const arrow of steeringGizmos.values())arrow.visible=showSteeringVector;
+ for(const trail of steeringTrails.values())trail.visible=showSteeringVector;
+});
 function updateSteeringGizmo(actor,key,color){
- let arrow=steeringGizmos.get(key);
+ let arrow=steeringGizmos.get(key),trail=steeringTrails.get(key);
  if(!arrow){arrow=new THREE.ArrowHelper(new THREE.Vector3(0,0,1),new THREE.Vector3(),4,color,.7,.35);arrow.renderOrder=10;scene.add(arrow);steeringGizmos.set(key,arrow)}
+ if(!trail){trail=new THREE.Line(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color,transparent:true,opacity:.8}));trail.renderOrder=9;scene.add(trail);steeringTrails.set(key,trail);actor.userData.steeringTrail=[]}
  const v=actor?.userData?.steeringVector;
- if(!v||!Number.isFinite(v.x)||!Number.isFinite(v.z)){arrow.visible=false;return}
- arrow.position.set(actor.position.x,.25,actor.position.z);
- arrow.setDirection(new THREE.Vector3(v.x,0,v.z).normalize());
- arrow.setLength(4,.7,.35);arrow.visible=showSteeringVector;
+ if(!v||!Number.isFinite(v.x)||!Number.isFinite(v.z)){arrow.visible=trail.visible=false;return}
+ arrow.position.set(actor.position.x,.25,actor.position.z);arrow.setDirection(new THREE.Vector3(v.x,0,v.z).normalize());arrow.setLength(4,.7,.35);arrow.visible=showSteeringVector;
+ // Draw the recent actual movement path so vector turns are visible as a curve.
+ const points=actor.userData.steeringTrail||(actor.userData.steeringTrail=[]),last=points[points.length-1];
+ if(!last||Math.hypot(actor.position.x-last.x,actor.position.z-last.z)>.12){points.push({x:actor.position.x,y:.18,z:actor.position.z});if(points.length>55)points.shift()}
+ trail.geometry.dispose();trail.geometry.setFromPoints(points.map(p=>new THREE.Vector3(p.x,p.y,p.z)));trail.visible=showSteeringVector&&points.length>1;
 }
 
 const navMap=new Map(nav.map(n=>[n.x+','+n.z,n])),navKeys=new Set(navMap.keys());let gridCenterX=NaN,gridCenterZ=NaN;
