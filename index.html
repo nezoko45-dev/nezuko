@@ -49,11 +49,24 @@ function curvedSteer(actor,target,speed,dt){
  const dx=target.x-actor.position.x,dz=target.z-actor.position.z,dist=Math.hypot(dx,dz);
  if(dist<.01)return;
  const ud=actor.userData,desiredX=dx/dist,desiredZ=dz/dist;
+ // Persistent steering vector: target attraction plus smooth obstacle repulsion.
  let v=ud.steeringVector;
  if(!v||!Number.isFinite(v.x)||!Number.isFinite(v.z)||Math.hypot(v.x,v.z)<.001)v={x:desiredX,z:desiredZ};
- // One persistent guidance vector: continuously bend the existing heading toward the target.
+ let avoidX=0,avoidZ=0;
+ const look=Math.min(7,Math.max(2,dist)),aheadX=actor.position.x+v.x*look,aheadZ=actor.position.z+v.z*look;
+ for(const group of city.children)for(const obj of group.children){
+  const b=obj.userData.navBox;if(!b||b.max.y<=.1)continue;
+  // Closest point on the obstacle bounds; influence grows smoothly near its edges.
+  const qx=Math.max(b.min.x,Math.min(aheadX,b.max.x)),qz=Math.max(b.min.z,Math.min(aheadZ,b.max.z));
+  let ox=aheadX-qx,oz=aheadZ-qz,d=Math.hypot(ox,oz);
+  if(d<3.8){
+   if(d<.05){const cx=(b.min.x+b.max.x)/2,cz=(b.min.z+b.max.z)/2;ox=actor.position.x-cx;oz=actor.position.z-cz;d=Math.hypot(ox,oz)||1}
+   const strength=(3.8-d)/3.8;avoidX+=(ox/d)*strength;avoidZ+=(oz/d)*strength;
+  }
+ }
+ const steerX=desiredX+avoidX*2.6,steerZ=desiredZ+avoidZ*2.6;
  const blend=1-Math.exp(-Math.max(0,dt)*2.8);
- v.x+=(desiredX-v.x)*blend;v.z+=(desiredZ-v.z)*blend;
+ v.x+=(steerX-v.x)*blend;v.z+=(steerZ-v.z)*blend;
  const length=Math.hypot(v.x,v.z)||1;v.x/=length;v.z/=length;ud.steeringVector=v;
  const step=Math.min(speed*dt,Math.max(0,dist-.8));
  actor.position.x+=v.x*step;actor.position.z+=v.z*step;
